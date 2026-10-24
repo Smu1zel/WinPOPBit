@@ -113,6 +113,7 @@ def build_executable(python_exe: str, root_dir: Path, build_dir: Path) -> Path:
         "--onefile",
         "--assume-yes-for-downloads",
         "--include-package=pefile",
+        "--include-package=src",
         f"--output-dir={build_dir}",
         "--remove-output",
         "--python-flag=-O",
