@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<BadBlobs>
+    <!-- Windows NT Kernel: In-place SSE4.2 requirement patch -->
+    <Blob id="ntoskrnl" action="patch" patcher="kernel_sse42" enabled="true">
+        <Target>Windows/System32/ntoskrnl.exe</Target>
+        <Description>Windows 11's NT Kernel (Bypasses SSE4.2 CPUID requirement table check)</Description>
+        <Options>
+            <!-- You probably don't need to change any of these, but they can be useful for debugging -->
+            <Option name="patch_cpuid" value="true" />
+            <Option name="patch_kiset" value="false" />
+            <!-- This indirectly disables bugchecks/BSODs. Do not enable unless you are debugging in QEMU. This will not help you resolve BSODs. -->
+            <Option name="debug_loop" value="false" />
+        </Options>
+    </Blob>
+
+    <!-- Windows Provisioning Tool: Workaround for post-install provtool crash on NTDLL's SSE4.2 CRC32 -->
+    <!-- This is a hack that tricks Windows Setup into thinking provtool succeeded, without it actually doing anything -->
+    <!-- Unless you actually need provtool (you likely don't), leave this enabled to avoid install issues -->
+    <Blob id="provtool" action="patch" patcher="provtool_exit" enabled="true">
+        <Target>Windows/System32/provtool.exe</Target>
+        <Description>Windows Provisioning Tool (Exits 0 to bypass SSE4.2 CRC32 crash during Setup)</Description>
+    </Blob>
+
+    <!-- Windows Boot Loader: In-place Code Integrity and testsigning/nointegritychecks strip bypass (disabled by default) -->
+    <!-- This series, if enabled, allows you to boot Windows normally without F8, as if nothing was patched -->
+    <!-- This is experimental and can lead to unbootable ISOs. Only flip to true if you are willing to gamble with your build -->
+    <Blob id="winload_boot_efi" action="patch" patcher="winload" enabled="true">
+        <Target>Windows/System32/boot/winload.efi</Target>
+        <Description>Windows Boot Loader UEFI (Bypasses CI check and preserves testsigning without F8)</Description>
+        <Options>
+            <Option name="patch_ci_filter" value="true" />
+            <Option name="patch_boot_options" value="true" />
+        </Options>
+    </Blob>
+
+    <Blob id="winload_sys32_efi" action="patch" patcher="winload" enabled="true">
+        <Target>Windows/System32/winload.efi</Target>
+        <Description>Windows Boot Loader UEFI System32 (Bypasses CI check and preserves testsigning without F8)</Description>
+        <Options>
+            <Option name="patch_ci_filter" value="true" />
+            <Option name="patch_boot_options" value="true" />
+        </Options>
+    </Blob>
+
+    <Blob id="winload_exe" action="patch" patcher="winload" enabled="true">
+        <Target>Windows/System32/winload.exe</Target>
+        <Description>Windows Boot Loader Legacy BIOS (Bypasses CI check and preserves testsigning without F8)</Description>
+        <Options>
+            <Option name="patch_ci_filter" value="true" />
+            <Option name="patch_boot_options" value="true" />
+        </Options>
+    </Blob>
+
+    <!-- BCD Store Configuration -->
+    <!-- Commands executed against both BIOS (boot\bcd) and UEFI (efi\microsoft\boot\bcd) stores via bcdedit -->
+    <Bcd>
+        <Command>/set {default} nointegritychecks Yes</Command>
+        <Command>/set {default} bootmenupolicy legacy</Command>
+    </Bcd>
+</BadBlobs>
