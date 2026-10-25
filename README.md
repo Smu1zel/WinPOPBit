@@ -109,9 +109,15 @@ Additionally, the `<Bcd>` section allows configuring which `bcdedit` commands ar
 
 ![Screenshot_AMD](images/Screenshot_AMD.png)
 
+Works on a AMD Athlon II!
+
 ![Screenshot_VIA](images/Screenshot_VIA.png)
 
+Works on a VIA Nano CPU!
+
 ![Screenshot_NX](images/Screenshot_NX.png)
+
+Works on an Intel Pentium 4 Northwood from 2002!
 
 ## Walkthrough
 You can review [Patching and Installing Windows 11 26H2 Walkthrough](GUIDE_WIN11.md) for guidance on how to practically patch and install Windows 11 on an unsupported system.
