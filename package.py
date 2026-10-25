@@ -13,6 +13,7 @@ containing:
   - LICENSE
   - LICENSE.PEFILE
   - blobs/README.txt
+  - README.html (compiled from README.md at runtime)
 ================================================================================
 """
 
@@ -22,6 +23,9 @@ import shutil
 import subprocess
 import argparse
 import zipfile
+import base64
+import mimetypes
+import re
 from pathlib import Path
 
 
@@ -150,10 +154,177 @@ def build_executable(python_exe: str, root_dir: Path, build_dir: Path) -> Path:
     return exe_path
 
 
+def compile_readme_to_html(root_dir: Path) -> Path:
+    """
+    Compiles README.md into a standalone, styled README.html with:
+      - GitHub-style alert callouts (> [!NOTE], > [!IMPORTANT], etc.)
+      - Fenced code blocks and tables
+      - Inlined base64 images (so the HTML is completely self-contained)
+      - Responsive GitHub-like CSS with dark/light mode support
+    """
+    try:
+        import markdown2
+    except ImportError:
+        print("[-] Warning: 'markdown2' is not installed. Run: pip install markdown2")
+        print("    Skipping README.html generation.")
+        return None
+
+    readme_md = root_dir / "README.md"
+    if not readme_md.is_file():
+        print(f"[-] Warning: {readme_md} not found.")
+        return None
+
+    print(f"[*] Compiling {readme_md.name} to standalone README.html...")
+    content = readme_md.read_text(encoding="utf-8")
+
+    extras = [
+        "fenced-code-blocks",
+        "alerts",
+        "tables",
+        "header-ids",
+        "cuddled-lists",
+        "strike",
+        "task_list",
+        "code-friendly",
+    ]
+
+    body_html = markdown2.markdown(content, extras=extras)
+
+    # Inline local images into base64 data URIs
+    def inline_image_match(match):
+        img_src = match.group(1)
+        if img_src.startswith(("http://", "https://", "data:")):
+            return match.group(0)
+        img_path = (root_dir / img_src).resolve()
+        if img_path.is_file():
+            mime_type, _ = mimetypes.guess_type(str(img_path))
+            mime_type = mime_type or "image/png"
+            b64_data = base64.b64encode(img_path.read_bytes()).decode("ascii")
+            print(f"    + Inlined image {img_src} as base64 ({img_path.stat().st_size:,} bytes)")
+            return f'src="data:{mime_type};base64,{b64_data}"'
+        return match.group(0)
+
+    body_html = re.sub(r'src=["\']([^"\']+)["\']', inline_image_match, body_html)
+
+    # GitHub-like CSS stylesheet
+    full_html = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WinPOPBit - README</title>
+<style>
+  :root {{
+    --bg-color: #0d1117;
+    --text-color: #c9d1d9;
+    --border-color: #30363d;
+    --code-bg: #161b22;
+    --link-color: #58a6ff;
+    --blockquote-border: #3b434b;
+  }}
+  @media (prefers-color-scheme: light) {{
+    :root {{
+      --bg-color: #ffffff;
+      --text-color: #24292f;
+      --border-color: #d0d7de;
+      --code-bg: #f6f8fa;
+      --link-color: #0969da;
+      --blockquote-border: #d0d7de;
+    }}
+  }}
+  body {{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    line-height: 1.6;
+    color: var(--text-color);
+    background-color: var(--bg-color);
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 2.5rem 1.5rem;
+    box-sizing: border-box;
+  }}
+  a {{ color: var(--link-color); text-decoration: none; }}
+  a:hover {{ text-decoration: underline; }}
+  h1, h2, h3, h4 {{
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.3em;
+    margin-top: 1.8em;
+    font-weight: 600;
+  }}
+  h1 {{ font-size: 2rem; margin-top: 0; }}
+  h2 {{ font-size: 1.5rem; }}
+  h3 {{ font-size: 1.25rem; }}
+  p, ul, ol {{ margin-top: 0; margin-bottom: 16px; }}
+  ul, ol {{ padding-left: 2em; }}
+  li + li {{ margin-top: 0.25em; }}
+  hr {{ height: 0.25em; padding: 0; margin: 24px 0; background-color: var(--border-color); border: 0; }}
+  pre, code {{ font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }}
+  code {{ background-color: var(--code-bg); padding: 0.2em 0.4em; border-radius: 6px; font-size: 85%; }}
+  pre {{
+    background-color: var(--code-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 1rem;
+    overflow-x: auto;
+    line-height: 1.45;
+  }}
+  pre code {{ background-color: transparent; padding: 0; font-size: 85%; }}
+  blockquote {{
+    margin: 1em 0;
+    padding: 0 1em;
+    color: #8b949e;
+    border-left: 0.25em solid var(--blockquote-border);
+  }}
+  table {{ border-collapse: collapse; width: 100%; margin: 1em 0; }}
+  table th, table td {{ border: 1px solid var(--border-color); padding: 6px 13px; }}
+  table tr:nth-child(2n) {{ background-color: var(--code-bg); }}
+  img {{ max-width: 100%; height: auto; border-radius: 6px; margin: 0.5rem 0; }}
+  .alert {{
+    padding: 0.75rem 1rem;
+    margin: 1rem 0;
+    border-left: 4px solid;
+    border-radius: 6px;
+    background-color: var(--code-bg);
+  }}
+  .alert em {{
+    font-weight: 600;
+    font-style: normal;
+    display: block;
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    letter-spacing: 0.5px;
+  }}
+  .alert p:last-child {{ margin-bottom: 0; }}
+  .alert.note {{ border-color: #1f6feb; }}
+  .alert.note em {{ color: #58a6ff; }}
+  .alert.important {{ border-color: #8957e5; }}
+  .alert.important em {{ color: #bc8cff; }}
+  .alert.warning {{ border-color: #d29922; }}
+  .alert.warning em {{ color: #e3b341; }}
+  .alert.tip {{ border-color: #238636; }}
+  .alert.tip em {{ color: #3fb950; }}
+  .alert.caution {{ border-color: #da3633; }}
+  .alert.caution em {{ color: #f85149; }}
+</style>
+</head>
+<body>
+{body_html}
+</body>
+</html>
+"""
+
+    out_path = root_dir / "README.html"
+    out_path.write_text(full_html, encoding="utf-8")
+    print(f"[+] Successfully generated standalone {out_path.name} ({out_path.stat().st_size:,} bytes)")
+    return out_path
+
+
 def create_release_zip(root_dir: Path, exe_path: Path, output_zip: Path):
     """
     Packages the executable and required assets into a zip file.
     """
+    readme_html = compile_readme_to_html(root_dir)
+
     required_files = [
         (exe_path, "winpopbit.exe"),
         (root_dir / "badblobs.xml", "badblobs.xml"),
@@ -161,8 +332,12 @@ def create_release_zip(root_dir: Path, exe_path: Path, output_zip: Path):
         (root_dir / "badblobs_win10_nx.xml", "badblobs_win10_nx.xml"),
         (root_dir / "LICENSE", "LICENSE"),
         (root_dir / "LICENSE.PEFILE", "LICENSE.PEFILE"),
+        (root_dir / "README.md", "README.md"),
         (root_dir / "blobs" / "README.txt", "blobs/README.txt"),
     ]
+
+    if readme_html and readme_html.is_file():
+        required_files.append((readme_html, "README.html"))
 
     for file_path, arcname in required_files:
         if not file_path.is_file():
