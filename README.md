@@ -105,9 +105,11 @@ Additionally, the `<Bcd>` section allows configuring which `bcdedit` commands ar
 - Intel Core 2 CPUs are not currently supported. These lack POPCNT, which *is* used heavily.
 - This whole thing is experimental. Please file any bugs or quirks you find in the Issues tab.
 
-## Screenshot
+## Screenshots
 
 ![Screenshot](images/Screenshot.png)
+
+![Screenshot](images/Screenshot_NX.png)
 
 ## Walkthrough
 You can review [Patching and Installing Windows 11 26H2 Walkthrough](GUIDE_WIN11.md) for guidance on how to practically patch and install Windows 11 on an unsupported system.
