@@ -7,7 +7,7 @@ from .pe import fix_pe_checksum
 
 def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: bool = False, enable_debug: bool = False) -> tuple:
     """
-    Applies the core POP4.2 kernel modifications to a raw ntoskrnl.exe bytearray:
+    Applies the core WinPOPBit kernel modifications to a raw ntoskrnl.exe bytearray:
     
     1. CPUID Requirements Table Patch (SSE4.2 Flags 0x0D -> 0x0C):
        - Leaf: 1, Subleaf: 0, Mask: 0x00100000 (Bit 20: SSE4.2), Register: 2 (ECX), Flags: 0x0000000D

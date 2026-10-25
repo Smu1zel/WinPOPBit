@@ -1,5 +1,5 @@
 """
-POP4.2 Core Library
+WinPOPBit Core Library
 """
 from .database import BlobDatabase, BlobItem
 from .wim import WimMountSession

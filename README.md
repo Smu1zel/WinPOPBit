@@ -1,4 +1,4 @@
-# POP4.2
+# WinPOPBit (formerly POP4.2)
 This is an experimental patcher that patches various Windows versions to boot on unsupported hardware.
 
 It started as a patcher that allowed CPUs *with* POPCNT, but *without* SSE4.2 (such as the AMD Phenom and K10 lines of CPUs) to boot Windows 11 24H2 and beyond. The project now also supports patching Windows 10's NX bit requirement as well, allowing users to install the latest version of Windows 10 on systems as old as the year 2000.
@@ -24,15 +24,15 @@ Due to this, getting Windows 10 to work required manually patching every call si
 
 ### 1. Build a Full Patched ISO (Recommended)
 > [!IMPORTANT]
-> Substitute `python pop42.py` with `pop42.exe` if running from a Nuitka build.
+> Substitute `python winpopbit.py` with `winpopbit.exe` if running from a Nuitka build.
 
 You can build a bootable dual-boot (UEFI + BIOS) patched ISO from your original Windows 11 ISO with a single command:
 ```bash
-python pop42.py build -i Win11_24H2_English_x64.iso -o Win11_Patched.iso --clean --index <index_number>
+python winpopbit.py build -i Win11_24H2_English_x64.iso -o Win11_Patched.iso --clean --index <index_number>
 ```
 For patching Windows 10, use a different command:
 ```bash
-python pop42.py build -c badblobs_win10_nx.xml -i Windows10.iso -o Win10_Patched.iso --clean --index <index_number>
+python winpopbit.py build -c badblobs_win10_nx.xml -i Windows10.iso -o Win10_Patched.iso --clean --index <index_number>
 ```
 > [!NOTE]
 > This command will automatically request Administrator elevation to manage WIM mounts and offline registry hives.
@@ -41,28 +41,28 @@ python pop42.py build -c badblobs_win10_nx.xml -i Windows10.iso -o Win10_Patched
 If you only need to patch individual binaries directly (e.g. for testing or Windows PE):
 * **Patch the NT Kernel (`ntoskrnl.exe`):**
   ```bash
-  python pop42.py patch kernel_sse42 -i path\to\ntoskrnl.exe -o path\to\ntoskrnl_patched.exe
+  python winpopbit.py patch kernel_sse42 -i path\to\ntoskrnl.exe -o path\to\ntoskrnl_patched.exe
   ```
 * **Patch the Boot Loader (`winload.efi` / `winload.exe`):**
   ```bash
-  python pop42.py patch winload -i path\to\winload.exe -o path\to\winload_patched.exe
+  python winpopbit.py patch winload -i path\to\winload.exe -o path\to\winload_patched.exe
   ```
 * **Patch the Provisioning Tool (`provtool.exe`):**
   ```bash
-  python pop42.py patch provtool_exit -i path\to\provtool.exe -o path\to\provtool_patched.exe
+  python winpopbit.py patch provtool_exit -i path\to\provtool.exe -o path\to\provtool_patched.exe
   ```
 For the NX patches:
 * **Patch the NT Kernel (`ntoskrnl.exe`):**
   ```bash
-  python pop42.py patch kernel_nx -i path\to\ntoskrnl.exe -o path\to\ntoskrnl_patched.exe
+  python winpopbit.py patch kernel_nx -i path\to\ntoskrnl.exe -o path\to\ntoskrnl_patched.exe
   ```
 * **Patch the Boot Loader (`winload.efi` / `winload.exe`):**
   ```bash
-  python pop42.py patch winload_nx -i path\to\winload.exe -o path\to\winload_patched.exe
+  python winpopbit.py patch winload_nx -i path\to\winload.exe -o path\to\winload_patched.exe
   ```
 * **Patch the HAL (`hal.dll` / `halmacpi.dll`):**
   ```bash
-  python pop42.py patch hal_nx -i path\to\hal.dll -o path\to\hal_patched.dll
+  python winpopbit.py patch hal_nx -i path\to\hal.dll -o path\to\hal_patched.dll
   ```
 > [!NOTE]
 > If `-o` is omitted, the input file will be modified and overwritten in-place.
@@ -86,7 +86,7 @@ Likewise, skipping `msxml6.dll` will cause Windows to appear to install, but lat
 For these reasons, replacing these files with their 23H2 versions in `blobs/` is required.
 
 ## Customizing Blobs and BCD (`badblobs.xml`)
-POP4.2 tracks problematic binaries and boot configurations using `badblobs.xml`. Each `<Blob>` entry defines target paths and actions (`patch`, `replace`, `ignore`). You can customize or add replacement blobs by editing `badblobs.xml`.
+WinPOPBit tracks problematic binaries and boot configurations using `badblobs.xml`. Each `<Blob>` entry defines target paths and actions (`patch`, `replace`, `ignore`). You can customize or add replacement blobs by editing `badblobs.xml`.
 
 Additionally, the `<Bcd>` section allows configuring which `bcdedit` commands are executed against both the BIOS (`boot\bcd`) and UEFI (`efi\microsoft\boot\bcd`) BCD stores on the installation media:
 

@@ -416,7 +416,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     int winHeight = 330; // Extended height for additional checkboxes
 
     HWND hwnd = CreateWindowExW(
-        0, CLASS_NAME, L"POP4.2, a Windows 11 SSE4.2 Requirements Patcher",
+        0, CLASS_NAME, L"WinPOPBit, a Windows 11 SSE4.2 Requirements Patcher",
         WS_OVERLAPPEDWINDOW & ~WS_THICKFRAME & ~WS_MAXIMIZEBOX, // Fixed size window
         (screenWidth - winWidth) / 2, (screenHeight - winHeight) / 2,
         winWidth, winHeight,

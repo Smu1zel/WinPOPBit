@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-POP4.2: Windows 11 SSE4.2 Requirements Patcher & ISO Builder
+WinPOPBit: Windows 11 SSE4.2 Requirements Patcher & ISO Builder
 ================================================================================
 This tool allows CPUs with POPCNT but WITHOUT SSE4.2 (such as AMD Phenom II,
 Athlon II, and K10 family CPUs) to install and boot Windows 11 24H2 and beyond.
@@ -60,10 +60,10 @@ class UnifiedArgumentParser(argparse.ArgumentParser):
 
 def main():
     parser = UnifiedArgumentParser(
-        prog="pop42.py",
+        prog="winpopbit.py",
         description="""
 ================================================================================
-POP4.2: Windows 11 SSE4.2 Requirements Patcher & ISO Builder
+WinPOPBit: Windows 11 SSE4.2 Requirements Patcher & ISO Builder
 ================================================================================
 Bypasses mandatory SSE4.2 CPU instruction requirements on Windows 11 (24H2+)
 for CPUs with POPCNT (AMD Phenom II, Athlon II, K10, etc.) by converting
@@ -75,26 +75,26 @@ kernel CPUID table entries from mandatory (0x0D) to optional (0x0C).
 COMMON USAGE EXAMPLES:
 ================================================================================
   # 1. Build a full bootable Windows 11 ISO patching only Windows 11 Pro (Index 6):
-  python pop42.py build -i Win11_24H2_x64.iso -o Win11_Patched.iso --index 6
+  python winpopbit.py build -i Win11_24H2_x64.iso -o Win11_Patched.iso --index 6
 
   # 2. Build ISO patching ONLY boot.wim (skipping install.wim entirely):
-  python pop42.py build -i Win11_24H2_x64.iso --boot-only
+  python winpopbit.py build -i Win11_24H2_x64.iso --boot-only
 
   # 3. Build with custom XML profile:
-  python pop42.py build -i Win11_24H2_x64.iso -c custom_badblobs.xml
+  python winpopbit.py build -i Win11_24H2_x64.iso -c custom_badblobs.xml
 
   # 4. Patch a standalone kernel file using the registered 'kernel_sse42' patcher:
-  python pop42.py patch kernel_sse42 -i C:\\path\\to\\ntoskrnl.exe
+  python winpopbit.py patch kernel_sse42 -i C:\\path\\to\\ntoskrnl.exe
 
   # 5. Patch kernel to a separate file with custom options:
-  python pop42.py patch kernel_sse42 -i ntoskrnl.exe -o ntoskrnl_debug.exe -O debug_loop=true -O patch_kiset=true
+  python winpopbit.py patch kernel_sse42 -i ntoskrnl.exe -o ntoskrnl_debug.exe -O debug_loop=true -O patch_kiset=true
 
   # 6. Interactive wizard (prompts for ISO path and edition index):
-  python pop42.py
+  python winpopbit.py
         """
     )
 
-    subparsers = parser.add_subparsers(dest="mode", help="Execution mode (run 'pop42.py <command> --help' for command-specific help)")
+    subparsers = parser.add_subparsers(dest="mode", help="Execution mode (run 'winpopbit.py <command> --help' for command-specific help)")
     parser._subparsers_ref = subparsers
 
     # Mode 1: PATCH (Standalone binary patcher)
@@ -129,7 +129,7 @@ COMMON USAGE EXAMPLES:
     # Interactive prompt fallback when run with no arguments or double-clicked
     if len(sys.argv) == 1:
         print("="*70)
-        print("POP4.2 - Windows 11 SSE4.2 Requirements Patcher")
+        print("WinPOPBit - Windows 11 SSE4.2 Requirements Patcher")
         print("="*70)
         print("1. Build Patched ISO (Automated)")
         print("2. Patch standalone ntoskrnl.exe")
@@ -146,13 +146,13 @@ COMMON USAGE EXAMPLES:
             if not idx_input:
                 idx_input = "1"
 
-            sys.argv = ["pop42.py", "build", "-i", iso_input, "--index", idx_input]
+            sys.argv = ["winpopbit.py", "build", "-i", iso_input, "--index", idx_input]
         elif choice == "2":
             k_input = input("Enter path to ntoskrnl.exe: ").strip().strip('"')
             if not k_input or not os.path.exists(k_input):
                 print("[-] Error: Kernel file not found.")
                 sys.exit(1)
-            sys.argv = ["pop42.py", "patch", "kernel_sse42", "-i", k_input]
+            sys.argv = ["winpopbit.py", "patch", "kernel_sse42", "-i", k_input]
         else:
             sys.exit(0)
 
@@ -190,7 +190,7 @@ COMMON USAGE EXAMPLES:
         out_file = args.output if args.output else args.input
 
         print("="*70)
-        print(f"POP4.2 Standalone Patch Mode: '{args.patcher}'")
+        print(f"WinPOPBit Standalone Patch Mode: '{args.patcher}'")
         print(f"  Target:     {args.input}")
         print(f"  Output:     {out_file}")
         if options:

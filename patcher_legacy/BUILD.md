@@ -18,13 +18,13 @@ pacman -S git mingw-w64-x86_64-gcc make
 3. Clone the source code.
 
 ```
-git clone https://github.com/Smu1zel/POP4.2
+git clone https://github.com/Smu1zel/WinPOPBit
 ```
 
 4. Enter the patcher directory. 
 
 ```
-cd POP4.2/patcher_legacy
+cd WinPOPBit/patcher_legacy
 ```
 
 5. Compile the program.
@@ -33,4 +33,4 @@ cd POP4.2/patcher_legacy
 make
 ```
 
-The resulting binary should be in [MSYS2 install folder]/home/[your user name]/POP4.2/patcher. 
+The resulting binary should be in [MSYS2 install folder]/home/[your user name]/WinPOPBit/patcher. 

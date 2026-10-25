@@ -2,6 +2,9 @@
 /pop42.build
 /pop42.dist
 /pop42.onefile-build
+/winpopbit.build
+/winpopbit.dist
+/winpopbit.onefile-build
 /dist
 /build_workspace
 /tools

@@ -1,7 +1,7 @@
 # Patching and Installing Windows 11 26H2 Walkthrough
 
-> **Status of this walkthrough:** This records a real full installation attempt using POP4.2 and Windows 11 26H2 build `26300.9550` on an AMD Phenom II system. 
-> POP4.2 is experimental. Windows 11 on unsupported hardware is not supported by Microsoft. Back up all important data and prepare recovery media before starting.
+> **Status of this walkthrough:** This records a real full installation attempt using WinPOPBit (formerly POP4.2) and Windows 11 26H2 build `26300.9550` on an AMD Phenom II system. 
+> WinPOPBit is experimental. Windows 11 on unsupported hardware is not supported by Microsoft. Back up all important data and prepare recovery media before starting.
 
 
 ### In-place upgrades
@@ -28,19 +28,19 @@ Other CPU families, firmware modes, image builds, and editions have not been est
 
 - A Windows 11 26H2 x64 ISO. For this test, the ISO was generated from UUP files for build `26300.9550`.
 - A Windows 11 23H2 x64 image from which the replacement DLLs listed below can be extracted.
-- The POP4.2 source and its Python prerequisites.
+- The WinPOPBit source and its Python prerequisites.
 - Rufus and a USB drive large enough for the resulting installation media.
 - A separate Windows recovery USB or another way to restore the existing installation.
 - A backup of the target disk. **A clean installation can erase data if the wrong partition is selected.**
 
-See the [POP4.2 README](https://github.com/Smu1zel/POP4.2/blob/master/README.md) for current project prerequisites and changes. Use the revision being tested or documented rather than assuming every future version behaves identically.
+See the [WinPOPBit README](https://github.com/Smu1zel/WinPOPBit/blob/master/README.md) for current project prerequisites and changes. Use the revision being tested or documented rather than assuming every future version behaves identically.
 
-## 3. Prepare POP4.2 and the 23H2 replacement DLLs
+## 3. Prepare WinPOPBit and the 23H2 replacement DLLs
 
-1. Obtain the latest POP4.2 source. To reproduce the source revision used in this test, check out:
+1. Obtain the latest WinPOPBit source. To reproduce the source revision used in this test, check out:
 
    ```text
-   git clone https://github.com/Smu1zel/POP4.2.git
+   git clone https://github.com/Smu1zel/WinPOPBit.git
    ```
 
 2. Install the Python dependency in an elevated or appropriately configured Python environment:
@@ -53,13 +53,13 @@ See the [POP4.2 README](https://github.com/Smu1zel/POP4.2/blob/master/README.md)
 
 3. Extract these files from a **Windows 11 23H2 x64 image** into the repository's `blobs` directory. Use the correct 64-bit or 32-bit source for each path:
 
-   | Source path inside the mounted 23H2 Windows image | Destination under `POP4.2\blobs` |
+   | Source path inside the mounted 23H2 Windows image | Destination under `WinPOPBit\blobs` |
    | --- | --- |
    | `Windows\System32\WindowsCodecs.dll` | `WindowsCodecs.dll` |
    | `Windows\System32\msxml6.dll` | `msxml6.dll` |
    | `Windows\SysWOW64\msxml6.dll` | `msxml6_wow64.dll` |
 
-   Do not substitute the target 26H2 versions. POP4.2 documents these 23H2 replacements as important workarounds for SSE4.1 instructions in `WindowsCodecs.dll` and `msxml6.dll`; omitting them can make Setup or post-install registration fail.
+   Do not substitute the target 26H2 versions. WinPOPBit documents these 23H2 replacements as important workarounds for SSE4.1 instructions in `WindowsCodecs.dll` and `msxml6.dll`; omitting them can make Setup or post-install registration fail.
 
    Here is an example Powersheel script you can customise to copy the above .dll files. Don't assume everything matches on your system, double check and adjust paths, filenames and indexes.
 
@@ -103,7 +103,7 @@ The source ISO of Windows 11 26H2 used in the test was named:
 The exact build command used was:
 
 ```powershell
-python pop42.py build -i "C:\POP42\26300.9550.260920-2000.26H2_GE_RELEASE_SVC_PROD3_CLIENTPRO_OEMRET_X64FRE_EN-US.ISO" -o "C:\POP42\Win11_26H2_POP42_WinloadPatched.iso" --index 1
+python winpopbit.py build -i "C:\POP42\26300.9550.260920-2000.26H2_GE_RELEASE_SVC_PROD3_CLIENTPRO_OEMRET_X64FRE_EN-US.ISO" -o "C:\POP42\Win11_26H2_POP42_WinloadPatched.iso" --index 1
 ```
 
 Adjust paths and the image index for your own files. The test image's index `1` was Windows 11 Pro. Check the source ISO's indexes before building; do not assume index `1` is Pro in every ISO.

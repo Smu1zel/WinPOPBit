@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 ================================================================================
-POP4.2 Packaging Script
+WinPOPBit Packaging Script
 ================================================================================
-Compiles pop42.py into a standalone onefile Windows executable using Python 3.8
+Compiles winpopbit.py into a standalone onefile Windows executable using Python 3.8
 (to make Windows 8 work) and Nuitka, then bundles it into a release zip archive
 containing:
-  - pop42.exe
+  - winpopbit.exe
   - badblobs.xml
   - LICENSE
   - LICENSE.PEFILE
@@ -97,9 +97,9 @@ def check_dependencies(python_exe: str):
 
 def build_executable(python_exe: str, root_dir: Path, build_dir: Path) -> Path:
     """
-    Compiles pop42.py using Nuitka.
+    Compiles winpopbit.py using Nuitka.
     """
-    script_path = root_dir / "pop42.py"
+    script_path = root_dir / "winpopbit.py"
     if not script_path.is_file():
         print(f"[-] Error: Script not found: {script_path}")
         sys.exit(1)
@@ -134,10 +134,10 @@ def build_executable(python_exe: str, root_dir: Path, build_dir: Path) -> Path:
         print(f"[-] Nuitka build failed with return code {res.returncode}")
         sys.exit(res.returncode)
 
-    exe_path = build_dir / "pop42.exe"
+    exe_path = build_dir / "winpopbit.exe"
     if not exe_path.is_file():
         # Fallback check directly in root_dir or build_dir
-        cand = root_dir / "pop42.exe"
+        cand = root_dir / "winpopbit.exe"
         if cand.is_file():
             exe_path = cand
         else:
@@ -153,7 +153,7 @@ def create_release_zip(root_dir: Path, exe_path: Path, output_zip: Path):
     Packages the executable and required assets into a zip file.
     """
     required_files = [
-        (exe_path, "pop42.exe"),
+        (exe_path, "winpopbit.exe"),
         (root_dir / "badblobs.xml", "badblobs.xml"),
         (root_dir / "LICENSE", "LICENSE"),
         (root_dir / "LICENSE.PEFILE", "LICENSE.PEFILE"),
@@ -179,12 +179,12 @@ def create_release_zip(root_dir: Path, exe_path: Path, output_zip: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build and package POP4.2 into a release zip archive.")
+    parser = argparse.ArgumentParser(description="Build and package WinPOPBit into a release zip archive.")
     parser.add_argument(
         "-o",
         "--output",
-        default="dist/pop42-release.zip",
-        help="Path for output zip file (default: dist/pop42-release.zip)",
+        default="dist/winpopbit-release.zip",
+        help="Path for output zip file (default: dist/winpopbit-release.zip)",
     )
     parser.add_argument(
         "--build-dir",
@@ -199,7 +199,7 @@ def main():
     parser.add_argument(
         "--skip-build",
         action="store_true",
-        help="Skip Nuitka compilation and package existing pop42.exe from build-dir",
+        help="Skip Nuitka compilation and package existing winpopbit.exe from build-dir",
     )
     args = parser.parse_args()
 
@@ -208,11 +208,11 @@ def main():
     output_zip = (root_dir / args.output).resolve()
 
     if args.skip_build:
-        exe_path = build_dir / "pop42.exe"
+        exe_path = build_dir / "winpopbit.exe"
         if not exe_path.is_file():
-            exe_path = root_dir / "pop42.exe"
+            exe_path = root_dir / "winpopbit.exe"
         if not exe_path.is_file():
-            print(f"[-] Error: --skip-build specified but executable not found at {build_dir / 'pop42.exe'}")
+            print(f"[-] Error: --skip-build specified but executable not found at {build_dir / 'winpopbit.exe'}")
             sys.exit(1)
     else:
         python_exe = args.python or find_python_38()
