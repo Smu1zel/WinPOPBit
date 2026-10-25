@@ -107,7 +107,7 @@ Additionally, the `<Bcd>` section allows configuring which `bcdedit` commands ar
 
 ## Screenshots
 
-![Screenshot_AMD](images/Screenshot.png)
+![Screenshot_AMD](images/Screenshot_AMD.png)
 
 ![Screenshot_VIA](images/Screenshot_VIA.png)
 
