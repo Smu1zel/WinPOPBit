@@ -8,6 +8,8 @@ Compiles winpopbit.py into a standalone onefile Windows executable using Python 
 containing:
   - winpopbit.exe
   - badblobs.xml
+  - badblobs_via_u3xxx.xml
+  - badblobs_win10_nx.xml
   - LICENSE
   - LICENSE.PEFILE
   - blobs/README.txt
@@ -155,6 +157,8 @@ def create_release_zip(root_dir: Path, exe_path: Path, output_zip: Path):
     required_files = [
         (exe_path, "winpopbit.exe"),
         (root_dir / "badblobs.xml", "badblobs.xml"),
+        (root_dir / "badblobs_via_u3xxx.xml", "badblobs_via_u3xxx.xml"),
+        (root_dir / "badblobs_win10_nx.xml", "badblobs_win10_nx.xml"),
         (root_dir / "LICENSE", "LICENSE"),
         (root_dir / "LICENSE.PEFILE", "LICENSE.PEFILE"),
         (root_dir / "blobs" / "README.txt", "blobs/README.txt"),
