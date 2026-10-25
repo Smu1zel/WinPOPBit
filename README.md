@@ -1,8 +1,15 @@
 # POP4.2
-This is an experimental patcher that allows CPUs *with* POPCNT, but *without* SSE4.2 (such as the AMD Phenom and K10 lines of CPUs) to boot Windows 11 24H2 and beyond. It has been tested on Windows 11 25H2 v2 and 26H2. Other builds have not been tested, but should work.
+This is an experimental patcher that patches various Windows versions to boot on unsupported hardware.
+
+It started as a patcher that allowed CPUs *with* POPCNT, but *without* SSE4.2 (such as the AMD Phenom and K10 lines of CPUs) to boot Windows 11 24H2 and beyond. The project now also supports patching Windows 10's NX bit requirement as well, allowing users to install the latest version of Windows 10 on systems as old as the year 2000.
 
 ## What? Windows 11 needs that. This is impossible!
 Yes and no. While Windows 11 checks for *both* POPCNT and SSE4.2, it does not actually need SSE4.2 for 99% of its files, with only a few exceptions that can be worked around (read on). To enforce this, Microsoft uses the undocumented `RtlDetectProcessorFeatures` function and checks for requirements by reading data from `.rdata`. In kernel 26100.7171, this is at offset `00000001400088C0` and has the bytes `01 00 00 00 00 00 00 00 00 00 10 00 02 00 00 00 0D 00 00 00` in IDA. To defeat this, we simply flip that `0D` to a `0C`, telling Windows to effectively skip the check and continue booting.
+
+## I thought Windows 10 needed NX?
+It *technically* does and hardcodes it plentifully, but due to how NX works, there is no reason Microsoft could not have made it optional. NX bit (bit 63) is essentially a "never execute this in memory" flag designed to avoid executing data as executable code in memory. It is not an instruction like POPCNT and such are.
+While it is an instrumental part of modern system security (see TwilightHack for the Nintendo Wii for what happens *without* it), using it on systems without it is considered invalid, as the original PAE specification marked bit 63 as "reserved".
+Due to this, getting Windows 10 to work required manually patching every call site that hardcoded it (winload, ntoskrnl, hal/halmacpi), since simply patching the requirement check and using `nx AlwaysOff` was far from enough. While this sounds virtually impossible on the surface, the amount of WRMSRs and bit 63 writes become much more centralized once you realize that **only** ring 0 on x86 systems has the ability to utilize it, meaning the entirety of userspace (smss, ntdll, everything users run) will just work once all the low-level code is patched. Indeed, once Windows 10 booted—everything just worked.
 
 ## Prerequisites
 - Windows 8 or newer
@@ -11,17 +18,21 @@ Yes and no. While Windows 11 checks for *both* POPCNT and SSE4.2, it does not ac
   pip install pefile
   ```
 - Windows ADK (Deployment Tools) for `oscdimg.exe`. It will be automatically downloaded if missing.
-- A copy of `WindowsCodecs.dll` (64-bit) and `msxml6.dll` (both 64-bit and 32-bit) extracted from Windows 11 23H2 placed into the `blobs/` directory (see *"Why do I need DLLs?"* below). The 32-bit WOW64 variant of msxml6.dll must be renamed to "msxml6_wow64.dll".
+- _(If patching Windows 11 and lack SSE4.1)_ A copy of `WindowsCodecs.dll` (64-bit) and `msxml6.dll` (both 64-bit and 32-bit) extracted from Windows 11 23H2 placed into the `blobs/` directory (see *"Why do I need DLLs?"* below). The 32-bit WOW64 variant of msxml6.dll must be renamed to "msxml6_wow64.dll".
 
 ## Usage
 
 ### 1. Build a Full Patched ISO (Recommended)
 > [!IMPORTANT]
-> Substitute `pop42.exe` with `python pop42.py` if running from source.
+> Substitute `python pop42.py` with `pop42.exe` if running from a Nuitka build.
 
 You can build a bootable dual-boot (UEFI + BIOS) patched ISO from your original Windows 11 ISO with a single command:
 ```bash
-pop42.exe build -i Win11_24H2_English_x64.iso -o Win11_Patched.iso --clean --index <index_number>
+python pop42.py build -i Win11_24H2_English_x64.iso -o Win11_Patched.iso --clean --index <index_number>
+```
+For patching Windows 10, use a different command:
+```bash
+python pop42.py build -c badblobs_win10_nx.xml -i Windows10.iso -o Win10_Patched.iso --clean --index <index_number>
 ```
 > [!NOTE]
 > This command will automatically request Administrator elevation to manage WIM mounts and offline registry hives.
@@ -30,22 +41,35 @@ pop42.exe build -i Win11_24H2_English_x64.iso -o Win11_Patched.iso --clean --ind
 If you only need to patch individual binaries directly (e.g. for testing or Windows PE):
 * **Patch the NT Kernel (`ntoskrnl.exe`):**
   ```bash
-  pop42.exe patch kernel_sse42 -i path\to\ntoskrnl.exe -o path\to\ntoskrnl_patched.exe
+  python pop42.py patch kernel_sse42 -i path\to\ntoskrnl.exe -o path\to\ntoskrnl_patched.exe
   ```
 * **Patch the Boot Loader (`winload.efi` / `winload.exe`):**
   ```bash
-  pop42.exe patch winload -i path\to\winload.exe -o path\to\winload_patched.exe
+  python pop42.py patch winload -i path\to\winload.exe -o path\to\winload_patched.exe
   ```
 * **Patch the Provisioning Tool (`provtool.exe`):**
   ```bash
-  pop42.exe patch provtool_exit -i path\to\provtool.exe -o path\to\provtool_patched.exe
+  python pop42.py patch provtool_exit -i path\to\provtool.exe -o path\to\provtool_patched.exe
+  ```
+For the NX patches:
+* **Patch the NT Kernel (`ntoskrnl.exe`):**
+  ```bash
+  python pop42.py patch kernel_nx -i path\to\ntoskrnl.exe -o path\to\ntoskrnl_patched.exe
+  ```
+* **Patch the Boot Loader (`winload.efi` / `winload.exe`):**
+  ```bash
+  python pop42.py patch winload_nx -i path\to\winload.exe -o path\to\winload_patched.exe
+  ```
+* **Patch the HAL (`hal.dll` / `halmacpi.dll`):**
+  ```bash
+  python pop42.py patch hal_nx -i path\to\hal.dll -o path\to\hal_patched.dll
   ```
 > [!NOTE]
 > If `-o` is omitted, the input file will be modified and overwritten in-place.
 
 ### 3. Legacy C Patcher
 > [!IMPORTANT]
-> This patcher is deprecated. You probably want to use the Nuitka-compiled Python script instead for PE.
+> This patcher is deprecated and completely lacks support for the new NX patches. You probably want to use the Python script instead for PE.
 
 This can be found in the `patcher_legacy` folder of this repository. It's a standard Win32 app that should execute
 on basically anything that can run a Win32 executable.
@@ -53,6 +77,9 @@ on basically anything that can run a Win32 executable.
 ---
 
 ## Why do I need DLLs?
+> [!IMPORTANT]
+> The **one** exception to this requirement is some VIA U3xxx CPUs, since they have SSE4.1. For these, a separate badblobs configuration file is provided and can be used with the `-c` flag.
+
 For some reason, Microsoft compiled `WindowsCodecs.dll` and `msxml6.dll` with SSE4.1 instructions (`PMOVSXBW` and `PMOVZXBW`). If you do not replace `WindowsCodecs.dll`, Windows Setup will crash and restart when attempting to execute it.
 Even if you deploy the WIM manually, Windows will later enter Automatic Recovery as it tries to execute setup.exe again to finish installing.
 Likewise, skipping `msxml6.dll` will cause Windows to appear to install, but later fail to register *any* AppX package, resulting in "Why did my PC restart?" and a very broken install that can't even start explorer.
@@ -66,8 +93,6 @@ Additionally, the `<Bcd>` section allows configuring which `bcdedit` commands ar
 ```xml
 <Bcd>
     <Command>/set {default} nointegritychecks Yes</Command>
-    <Command>/set {default} testsigning Yes</Command>
-    <Command>/set {default} advancedoptions Yes</Command>
     <Command>/set {default} bootmenupolicy legacy</Command>
 </Bcd>
 ```
@@ -75,6 +100,7 @@ Additionally, the `<Bcd>` section allows configuring which `bcdedit` commands ar
 ---
 
 ## Known issues
+- For NX patching, you have to manually set `nx AlwaysOff` to avoid a MEMORY_MANAGEMENT bluescreen on Northwood and Willamette, and `nointegritychecks Yes` to fix booting after install.
 - Certain Nvidia nForce chipsets hang on boot. Needs further investigation.
 - Intel Core 2 CPUs are not currently supported. These lack POPCNT, which *is* used heavily.
 - This whole thing is experimental. Please file any bugs or quirks you find in the Issues tab.
@@ -84,7 +110,7 @@ Additionally, the `<Bcd>` section allows configuring which `bcdedit` commands ar
 ![Screenshot](images/Screenshot.png)
 
 ## Walkthrough
-You can review [Patching and Installing Windows 11 26H2 Walkthrough](GUIDE.md) for guidance on how to practically patch and install Windows 11 on an unsupported system.
+You can review [Patching and Installing Windows 11 26H2 Walkthrough](GUIDE_WIN11.md) for guidance on how to practically patch and install Windows 11 on an unsupported system.
 
 ## Credits
 - Bob Pony, for letting me test on his machine.
