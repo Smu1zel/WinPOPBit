@@ -7,9 +7,12 @@ It started as a patcher that allowed CPUs *with* POPCNT, but *without* SSE4.2 (s
 Yes and no. While Windows 11 checks for *both* POPCNT and SSE4.2, it does not actually need SSE4.2 for 99% of its files, with only a few exceptions that can be worked around (read on). To enforce this, Microsoft uses the undocumented `RtlDetectProcessorFeatures` function and checks for requirements by reading data from `.rdata`. In kernel 26100.7171, this is at offset `00000001400088C0` and has the bytes `01 00 00 00 00 00 00 00 00 00 10 00 02 00 00 00 0D 00 00 00` in IDA. To defeat this, we simply flip that `0D` to a `0C`, telling Windows to effectively skip the check and continue booting.
 
 ## I thought Windows 10 needed NX?
-It *technically* does and hardcodes it plentifully, but due to how NX works, there is no reason Microsoft could not have made it optional. NX bit (bit 63) is essentially a "never execute this in memory" flag designed to avoid executing data as executable code in memory. It is not an instruction like POPCNT and such are.
+It *technically* does and hardcodes it plentifully, but due to how NX works, there is no reason Microsoft could not have made it optional. NX bit (bit 63) is essentially a "never execute this in memory" flag designed to avoid executing data as executable code in memory. It is not an instruction like POPCNT and others are.
+
 While it is an instrumental part of modern system security (see TwilightHack for the Nintendo Wii for what happens *without* it), using it on systems without it is considered invalid, as the original PAE specification marked bit 63 as "reserved".
-Due to this, getting Windows 10 to work required manually patching every call site that hardcoded it (winload, ntoskrnl, hal/halmacpi), since simply patching the requirement check and using `nx AlwaysOff` was far from enough. While this sounds virtually impossible on the surface, the amount of WRMSRs and bit 63 writes become much more centralized once you realize that **only** ring 0 on x86 systems has the ability to utilize it, meaning the entirety of userspace (smss, ntdll, everything users run) will just work once all the low-level code is patched. Indeed, once Windows 10 booted—everything just worked.
+Due to this, getting Windows 10 to work required manually patching every call site that hardcoded it (winload, ntoskrnl, hal/halmacpi), since simply patching the requirement check and using `nx AlwaysOff` was far from enough.
+
+While this sounds virtually impossible on the surface, the amount of WRMSRs and bit 63 writes become much more centralized once you realize that **only** ring 0 on x86 systems can utilize it, meaning the entirety of userspace (smss, ntdll, everything users run) will just work once all the low-level code is patched. Indeed, once Windows 10 booted—everything just worked.
 
 ## Prerequisites
 - Windows 8 or newer
