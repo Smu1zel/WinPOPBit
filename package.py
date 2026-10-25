@@ -129,6 +129,7 @@ def build_executable(python_exe: str, root_dir: Path, build_dir: Path) -> Path:
         "--windows-uac-admin",
         "--noinclude-setuptools-mode=nofollow",
         "--noinclude-pytest-mode=nofollow",
+        "--no-deployment-flag=self-execution",
         str(script_path),
     ]
 
