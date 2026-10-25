@@ -27,7 +27,7 @@ While this sounds virtually impossible on the surface, the amount of WRMSRs and 
 
 ### 1. Build a Full Patched ISO (Recommended)
 > [!IMPORTANT]
-> Substitute `python winpopbit.py` with `winpopbit.exe` if running from a Nuitka build.
+> Substitute `python winpopbit.py` with `winpopbit.exe` if running from a release build.
 
 You can build a bootable dual-boot (UEFI + BIOS) patched ISO from your original Windows 11 ISO with a single command:
 ```bash
