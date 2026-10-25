@@ -107,9 +107,11 @@ Additionally, the `<Bcd>` section allows configuring which `bcdedit` commands ar
 
 ## Screenshots
 
-![Screenshot](images/Screenshot.png)
+![Screenshot_AMD](images/Screenshot.png)
 
-![Screenshot](images/Screenshot_NX.png)
+![Screenshot_VIA](images/Screenshot_VIA.png)
+
+![Screenshot_NX](images/Screenshot_NX.png)
 
 ## Walkthrough
 You can review [Patching and Installing Windows 11 26H2 Walkthrough](GUIDE_WIN11.md) for guidance on how to practically patch and install Windows 11 on an unsupported system.
