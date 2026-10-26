@@ -1,3 +1,14 @@
-* text eol=crlf
+* text=auto eol=crlf
+# Just to be sure.
+*.py text eol=crlf
+*.xml text eol=crlf
+*.md text eol=crlf
 *.pyc binary
 *.png binary
+*.exe binary
+*.dll binary
+*.zip binary
+*.wim binary
+*.iso binary
+*.ico binary
+*.qcow2 binary

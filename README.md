@@ -68,7 +68,7 @@ For the NX patches:
   python winpopbit.py patch hal_nx -i path\to\hal.dll -o path\to\hal_patched.dll
   ```
 > [!NOTE]
-> If `-o` is omitted, the input file will be modified and overwritten in-place.
+> If `-o` is omitted, the input binary will be modified and overwritten in-place.
 
 ### 3. Legacy C Patcher
 > [!IMPORTANT]
