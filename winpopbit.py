@@ -127,9 +127,12 @@ COMMON USAGE EXAMPLES:
     build_parser.add_argument("--oscdimg-path", default=None, metavar="PATH", help="Explicit path to oscdimg.exe. If omitted or outdated (< v2.55), automatically searches ADK/MiniTool/PATH or auto-downloads official Microsoft ADK v2.56 (~74 KB)")
 
     # Interactive prompt fallback when run with no arguments or double-clicked
+    custom_args = None
     if len(sys.argv) == 1:
         print("="*70)
-        print("WinPOPBit - Windows 11 SSE4.2 Requirements Patcher")
+        print("WinPOPBit - The Windows 11 SSE4.2 and Windows 10 NX Requirements Patcher")
+        print("="*70)
+        print("[!] This flow has not been updated for Windows 10 patching just yet; use manual commands.")
         print("="*70)
         print("1. Build Patched ISO (Automated)")
         print("2. Patch standalone ntoskrnl.exe")
@@ -146,17 +149,17 @@ COMMON USAGE EXAMPLES:
             if not idx_input:
                 idx_input = "1"
 
-            sys.argv = ["winpopbit.py", "build", "-i", iso_input, "--index", idx_input]
+            custom_args = ["build", "-i", iso_input, "--index", idx_input]
         elif choice == "2":
             k_input = input("Enter path to ntoskrnl.exe: ").strip().strip('"')
             if not k_input or not os.path.exists(k_input):
                 print("[-] Error: Kernel file not found.")
                 sys.exit(1)
-            sys.argv = ["winpopbit.py", "patch", "kernel_sse42", "-i", k_input]
+            custom_args = ["patch", "kernel_sse42", "-i", k_input]
         else:
             sys.exit(0)
 
-    args = parser.parse_args()
+    args = parser.parse_args(custom_args)
     app_dir = get_app_dir()
 
     # -------------------------------------------------------------------------

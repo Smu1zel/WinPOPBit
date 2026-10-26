@@ -27,24 +27,37 @@ def is_admin() -> bool:
         return False
 
 
+_INITIAL_ARGV0 = sys.argv[0] if sys.argv else ""
+
+
 def get_app_dir() -> str:
     """
     Returns the root directory where the application/script resides.
-    Handles Nuitka onefile / standalone binaries, PyInstaller, and raw Python execution.
+    Handles Nuitka onefile and regular Python execution.
     """
-    if "NUITKA_ONEFILE_BINARY" in os.environ:
-        return os.path.dirname(os.path.abspath(os.environ["NUITKA_ONEFILE_BINARY"]))
+    # 1. Nuitka onefile mode: __compiled__.original_argv0 holds original binary path
+    try:
+        orig = getattr(__compiled__, "original_argv0", None)
+        if orig:
+            resolved = shutil.which(orig) or os.path.abspath(orig)
+            return os.path.dirname(os.path.abspath(resolved))
+    except NameError:
+        pass
 
-    if "__compiled__" in globals() or getattr(sys, "frozen", False) or hasattr(sys, "_MEIPASS"):
-        return os.path.dirname(os.path.abspath(sys.executable))
+    # 2. Nuitka standalone directory mode (non-onefile)
+    if getattr(sys, "frozen", False) or "__compiled__" in globals():
+        exe_path = os.path.abspath(sys.executable)
+        if "onefile_" not in exe_path.lower() and "temp" not in exe_path.lower():
+            return os.path.dirname(exe_path)
 
-    file_dir = os.path.dirname(os.path.abspath(__file__))
-    if "onefile_" in file_dir or "temp" in file_dir.lower():
-        exe_dir = os.path.dirname(os.path.abspath(sys.executable))
-        if os.path.exists(os.path.join(exe_dir, "badblobs.xml")):
-            return exe_dir
+    # 3. Fallback to initial argv[0] if it points to an actual file on disk
+    if _INITIAL_ARGV0:
+        candidate = shutil.which(_INITIAL_ARGV0) or os.path.abspath(_INITIAL_ARGV0)
+        if os.path.isfile(candidate):
+            return os.path.dirname(os.path.abspath(candidate))
 
-    return file_dir
+    # 4. Raw Python execution (this file is in src/, app root is parent dir)
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def require_admin():

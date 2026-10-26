@@ -16,3 +16,6 @@ __pycache__/
 *.i64
 *.idb
 *.pdb
+*.log
+*.bxrc
+*.html
