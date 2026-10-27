@@ -103,9 +103,10 @@ Additionally, the `<Bcd>` section allows configuring which `bcdedit` commands ar
 ---
 
 ## Known issues
+- AGP GPUs will not work by default. See [this post](https://github.com/Smu1zel/WinPOPBit/discussions/23#discussioncomment-19227008) on the drivers Discussion thread for a solution.
 - For NX patching, you have to manually set `nx AlwaysOff` to avoid a MEMORY_MANAGEMENT bluescreen on Northwood and Willamette, and `nointegritychecks Yes` to fix booting after install.
-- Certain Nvidia nForce chipsets hang on boot. Needs further investigation.
-- Intel Core 2 CPUs are not currently supported. These lack POPCNT, which *is* used heavily.
+- Certain Nvidia nForce chipsets hang on boot on Windows 11. Needs further investigation.
+- Intel Core 2 CPUs are not currently supported on Windows 11. These lack POPCNT, which *is* used heavily.
 - This whole thing is experimental. Please file any bugs or quirks you find in the Issues tab.
 
 ## Screenshots
@@ -126,7 +127,9 @@ Works on an Intel Pentium 4 Northwood from 2002!
 You can review [Patching and Installing Windows 11 26H2 Walkthrough](GUIDE_WIN11.md) for guidance on how to practically patch and install Windows 11 on an unsupported system.
 
 ## Credits
-- Bob Pony, for letting me test on his machine.
+- [Bob Pony](https://www.youtube.com/channel/UCAZzz2Dd9Xh6vTjNcxhqPZw), for letting me test on his machine.
+- [Omores](https://www.youtube.com/watch?v=vs4bqCEnvUA), for his instrumental AGP driver base.
+- [Inteneich](https://github.com/inteneich) & [Jasmin Sehic](https://github.com/jasminsehic), for exceptional documentation improvements.
 - QEMU, for making a great emulator and debugger.
 - Google, for making Gemini, a great model that helped me figure this out.
 - IDA, for their invaluable disassembler.
