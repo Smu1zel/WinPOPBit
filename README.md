@@ -105,7 +105,7 @@ Additionally, the `<Bcd>` section allows configuring which `bcdedit` commands ar
 ## Known issues
 - AGP GPUs will not work by default. See [this post](https://github.com/Smu1zel/WinPOPBit/discussions/23#discussioncomment-19227008) on the drivers Discussion thread for a solution.
 - For NX patching, you have to manually set `nx AlwaysOff` to avoid a MEMORY_MANAGEMENT bluescreen on Northwood and Willamette, and `nointegritychecks Yes` to fix booting after install.
-- Certain Nvidia nForce chipsets hang on boot on Windows 11. Needs further investigation.
+- If HPET is unavailable (many nForce boards), Windows 11 will hang. If you absolutely cannot enable HPET in your BIOS, enable `pcat_clk_removal_workaround` in badblobs.xml.
 - Intel Core 2 CPUs are not currently supported on Windows 11. These lack POPCNT, which *is* used heavily.
 - This whole thing is experimental. Please file any bugs or quirks you find in the Issues tab.
 
