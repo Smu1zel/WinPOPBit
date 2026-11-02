@@ -1,11 +1,12 @@
 import os
 import re
 import struct
+import pefile
 from . import register_patcher
 from .pe import fix_pe_checksum
 
 
-def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: bool = False, enable_debug: bool = False) -> tuple:
+def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: bool = False, enable_debug: bool = False, pcat_clk_removal_workaround: bool = True) -> tuple:
     """
     Applies the core WinPOPBit kernel modifications to a raw ntoskrnl.exe bytearray:
     
@@ -18,7 +19,17 @@ def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: b
        - NOPs out hardcoded conditional branches in KiSetFeatureBits that guard processor feature bits.
        - Disabled by default since the CPUID table patch is sufficient for modern 24H2 builds.
     
-    3. KeBugCheckEx Debug Loop Patch (Optional, disabled by default):
+    3. PC/AT Clock Removal Workaround (Enabled by default):
+       - In Windows 11 24H2 (Build 25921+), Microsoft removed legacy PC/AT timer drivers (RTC / 8254 PIT).
+       - On systems where HPET is absent (e.g. nForce 3/4/500) or disabled in BIOS (e.g. some AMD 785G boards),
+         the kernel requires an Invariant Local APIC timer as the clock source.
+       - HalpApicTimerIsInvariant checks if AMD CPU Family >= 0x15 (Bulldozer). Older AMD CPUs (K8, K10 Phenom/Athlon)
+         fail this check (Family 0x0F/0x10), causing HalpTimerFindIdealClockSource to return NULL and BugCheck 0x5C
+         (0x110, 0x5250631, 0x14, 0xC0000001).
+       - Patches the AMD family check in HalpApicTimerIsInvariant to return 1 (True), allowing the Local APIC timer
+         to be registered as invariant and used as the clock source regardless of CPUID family.
+
+    4. KeBugCheckEx Debug Loop Patch (Optional, disabled by default):
        - Overwrites the first 2 bytes of KeBugCheckEx with 'EB FE' (jmp $, infinite loop).
        - Allows attaching QEMU GDB debugger (via qemu_gdb_debugger.py) when a BugCheck 0x5D occurs
          to inspect live guest registers, walk the call stack, and read the failed requirement entry.
@@ -26,7 +37,8 @@ def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: b
     report = {
         "cpuid_patched": False,
         "kiset_patched": False,
-        "debug_loop_patched": False
+        "debug_loop_patched": False,
+        "pcat_clk_patched": False
     }
 
     # 1. CPUID Requirements Table Patch (Index 6: SSE4.2 Flags 0x0D -> 0x0C)
@@ -82,7 +94,42 @@ def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: b
         else:
             print("[-] Warning: KiSetFeatureBits CPU check signature not found.")
 
-    # 3. Optional KeBugCheckEx infinite loop patch (EB FE) for QEMU GDB debugging
+    # 3. PC/AT Legacy Timer Removal Workaround (HalpApicTimerIsInvariant AMD family check)
+    if pcat_clk_removal_workaround:
+        # Signature: mov rax, qword ptr gs:[0x20]; cmp byte ptr [rax + 0x40], 0x15
+        # 65 48 8B 04 25 20 00 00 00 (mov rax, gs:[20h])
+        # 80 78 40 15                (cmp byte ptr [rax+40h], 15h)
+        apic_sig = bytes.fromhex("65488B04252000000080784015")
+        already_patched_sig = bytes.fromhex("B0014883C4305DC3")
+
+        idx = data.find(apic_sig)
+        if idx != -1:
+            # Replace family check with:
+            # mov al, 1       (B0 01)
+            # add rsp, 0x30   (48 83 C4 30)
+            # pop rbp         (5D)
+            # ret             (C3)
+            # nop * 5         (90 90 90 90 90)
+            patch_bytes = bytearray(bytes.fromhex("B0014883C4305DC39090909090"))
+            data[idx : idx + 13] = patch_bytes
+
+            # Clean up following jb if present (short 72 ?? or near 0F 82 ?? ?? ?? ??)
+            if data[idx + 13] == 0x72:
+                data[idx + 13 : idx + 15] = b'\x90\x90'
+            elif data[idx + 13 : idx + 15] == b'\x0F\x82':
+                data[idx + 13 : idx + 19] = b'\x90' * 6
+
+            report["pcat_clk_patched"] = True
+            print(f"[+] Patched HalpApicTimerIsInvariant AMD family check at offset 0x{idx:X} (pcat_clk_removal_workaround).")
+        else:
+            already_idx = data.find(already_patched_sig)
+            if already_idx != -1:
+                report["pcat_clk_patched"] = True
+                print(f"[*] Notice: HalpApicTimerIsInvariant is already patched at offset 0x{already_idx:X}.")
+            else:
+                print("[-] Warning: HalpApicTimerIsInvariant AMD family check signature not found.")
+
+    # 4. Optional KeBugCheckEx infinite loop patch (EB FE) for QEMU GDB debugging
     if enable_debug:
         try:
             pe = pefile.PE(data=bytes(data))
@@ -109,7 +156,7 @@ def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: b
 
 
 @register_patcher("kernel_sse42")
-def patch_kernel_file(input_path: str, output_path: str = None, patch_cpuid: bool = True, patch_kiset: bool = False, debug_loop: bool = False, enable_debug: bool = False, **kwargs) -> bool:
+def patch_kernel_file(input_path: str, output_path: str = None, patch_cpuid: bool = True, patch_kiset: bool = False, debug_loop: bool = False, enable_debug: bool = False, pcat_clk_removal_workaround: bool = False, **kwargs) -> bool:
     """
     Registered patch routine for Windows Kernel ('kernel_sse42').
     Reads the input binary, applies byte patches, writes output, and recalculates PE checksum.
@@ -126,7 +173,13 @@ def patch_kernel_file(input_path: str, output_path: str = None, patch_cpuid: boo
     with open(input_path, "rb") as f:
         data = bytearray(f.read())
 
-    modified_data, report = patch_kernel_bytes(data, patch_cpuid, patch_kiset, is_debug)
+    modified_data, report = patch_kernel_bytes(
+        data,
+        patch_cpuid=patch_cpuid,
+        patch_kiset=patch_kiset,
+        enable_debug=is_debug,
+        pcat_clk_removal_workaround=pcat_clk_removal_workaround
+    )
 
     with open(output_path, "wb") as f:
         f.write(modified_data)

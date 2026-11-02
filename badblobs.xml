@@ -8,6 +8,9 @@
             <!-- You probably don't need to change any of these, but they can be useful for debugging -->
             <Option name="patch_cpuid" value="true" />
             <Option name="patch_kiset" value="false" />
+            <!-- Workaround for BugCheck 0x5C on older AMD CPUs (Family < 15h) without HPET (PC/AT timer removal) -->
+            <!-- If you absolutely cannot enable HPET on your system (nForce, some AMD boards), you must enable this -->
+            <Option name="pcat_clk_removal_workaround" value="false" />
             <!-- This indirectly disables bugchecks/BSODs. Do not enable unless you are debugging in QEMU. This will not help you resolve BSODs. -->
             <Option name="debug_loop" value="false" />
         </Options>
