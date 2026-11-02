@@ -4,14 +4,16 @@ from . import register_patcher
 from .pe import fix_pe_checksum
 
 
-def patch_winload_bytes(data: bytearray, patch_ci_filter: bool = True, patch_boot_options: bool = True) -> tuple:
+def patch_winload_bytes(
+    data: bytearray, patch_ci_filter: bool = True, patch_boot_options: bool = True
+) -> tuple:
     """
     Applies the winload Code Integrity (CI) and boot options bypass modifications:
-    
+
     1. ImgpFilterValidationFailure -> xor eax, eax; ret (31 C0 C3):
        Forces the Code Integrity validation filter to return STATUS_SUCCESS (0),
        preventing winload from rejecting the patched ntoskrnl.exe binary.
-       
+
     2. BlRemoveBootOption Stripping NOPs:
        NOPs out calls to BlRemoveBootOption that strip critical boot options:
        - 0x16000048: nointegritychecks
@@ -22,7 +24,7 @@ def patch_winload_bytes(data: bytearray, patch_ci_filter: bool = True, patch_boo
         "ci_filter_patched": False,
         "ci_filter_already_patched": False,
         "nointegritychecks_patched": False,
-        "testsigning_patched": False
+        "testsigning_patched": False,
     }
 
     # 1. Patch ImgpFilterValidationFailure
@@ -34,14 +36,22 @@ def patch_winload_bytes(data: bytearray, patch_ci_filter: bool = True, patch_boo
         if filter_idx != -1:
             data[filter_idx : filter_idx + 3] = bytes.fromhex("31C0C3")
             report["ci_filter_patched"] = True
-            print(f"[+] Patched ImgpFilterValidationFailure at offset 0x{filter_idx:X} (31 C0 C3 -> force STATUS_SUCCESS).")
+            print(
+                f"[+] Patched ImgpFilterValidationFailure at offset 0x{filter_idx:X} (31 C0 C3 -> force STATUS_SUCCESS)."
+            )
         else:
-            if (data.find(bytes.fromhex("31C0C348895808")) != -1 or 
-                data.find(bytes.fromhex("31C0C348896810")) != -1):
+            if (
+                data.find(bytes.fromhex("31C0C348895808")) != -1
+                or data.find(bytes.fromhex("31C0C348896810")) != -1
+            ):
                 report["ci_filter_already_patched"] = True
-                print("[*] Notice: ImgpFilterValidationFailure is already patched (31 C0 C3).")
+                print(
+                    "[*] Notice: ImgpFilterValidationFailure is already patched (31 C0 C3)."
+                )
             else:
-                print("[-] Warning: ImgpFilterValidationFailure signature not found in winload binary.")
+                print(
+                    "[-] Warning: ImgpFilterValidationFailure signature not found in winload binary."
+                )
 
     # 2. Patch BlRemoveBootOption calls
     if patch_boot_options:
@@ -51,12 +61,16 @@ def patch_winload_bytes(data: bytearray, patch_ci_filter: bool = True, patch_boo
         if idx1 != -1:
             for i in range(idx1, min(idx1 + 20, len(data))):
                 if data[i] == 0xE8:
-                    data[i : i + 5] = b'\x90' * 5
+                    data[i : i + 5] = b"\x90" * 5
                     report["nointegritychecks_patched"] = True
-                    print(f"[+] NOPed out BlRemoveBootOption(nointegritychecks) call at offset 0x{i:X}.")
+                    print(
+                        f"[+] NOPed out BlRemoveBootOption(nointegritychecks) call at offset 0x{i:X}."
+                    )
                     break
         else:
-            print("[-] Notice: nointegritychecks (0x16000048) removal signature not found.")
+            print(
+                "[-] Notice: nointegritychecks (0x16000048) removal signature not found."
+            )
 
         # 2b. Option 0x260000E1 (testsigning)
         sig_opt2 = bytes.fromhex("BAE1000026")
@@ -64,9 +78,11 @@ def patch_winload_bytes(data: bytearray, patch_ci_filter: bool = True, patch_boo
         if idx2 != -1:
             for i in range(idx2, min(idx2 + 20, len(data))):
                 if data[i] == 0xE8:
-                    data[i : i + 5] = b'\x90' * 5
+                    data[i : i + 5] = b"\x90" * 5
                     report["testsigning_patched"] = True
-                    print(f"[+] NOPed out BlRemoveBootOption(testsigning) call at offset 0x{i:X}.")
+                    print(
+                        f"[+] NOPed out BlRemoveBootOption(testsigning) call at offset 0x{i:X}."
+                    )
                     break
         else:
             print("[-] Notice: testsigning (0x260000E1) removal signature not found.")
@@ -75,7 +91,13 @@ def patch_winload_bytes(data: bytearray, patch_ci_filter: bool = True, patch_boo
 
 
 @register_patcher("winload")
-def patch_winload_file(input_path: str, output_path: str = None, patch_ci_filter: bool = True, patch_boot_options: bool = True, **kwargs) -> bool:
+def patch_winload_file(
+    input_path: str,
+    output_path: str = None,
+    patch_ci_filter: bool = True,
+    patch_boot_options: bool = True,
+    **kwargs,
+) -> bool:
     """
     Registered patch routine for Windows Boot Loader ('winload').
     Reads winload.exe or winload.efi, applies CI filter and boot option patches,
@@ -92,7 +114,9 @@ def patch_winload_file(input_path: str, output_path: str = None, patch_ci_filter
     with open(input_path, "rb") as f:
         data = bytearray(f.read())
 
-    modified_data, report = patch_winload_bytes(data, patch_ci_filter, patch_boot_options)
+    modified_data, report = patch_winload_bytes(
+        data, patch_ci_filter, patch_boot_options
+    )
 
     with open(output_path, "wb") as f:
         f.write(modified_data)

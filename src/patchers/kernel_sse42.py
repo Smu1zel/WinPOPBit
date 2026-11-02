@@ -6,19 +6,25 @@ from . import register_patcher
 from .pe import fix_pe_checksum
 
 
-def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: bool = False, enable_debug: bool = False, pcat_clk_removal_workaround: bool = True) -> tuple:
+def patch_kernel_bytes(
+    data: bytearray,
+    patch_cpuid: bool = True,
+    patch_kiset: bool = False,
+    enable_debug: bool = False,
+    pcat_clk_removal_workaround: bool = True,
+) -> tuple:
     """
     Applies the core WinPOPBit kernel modifications to a raw ntoskrnl.exe bytearray:
-    
+
     1. CPUID Requirements Table Patch (SSE4.2 Flags 0x0D -> 0x0C):
        - Leaf: 1, Subleaf: 0, Mask: 0x00100000 (Bit 20: SSE4.2), Register: 2 (ECX), Flags: 0x0000000D
        - Patching Flags from 0x0D (Mandatory) to 0x0C (Optional) tells RtlDetectProcessorFeatures
          to continue booting even if CPUID does not report SSE4.2 support.
-    
+
     2. KiSetFeatureBits Conditional Jumps Patch (Optional, disabled by default):
        - NOPs out hardcoded conditional branches in KiSetFeatureBits that guard processor feature bits.
        - Disabled by default since the CPUID table patch is sufficient for modern 24H2 builds.
-    
+
     3. PC/AT Clock Removal Workaround (Enabled by default):
        - In Windows 11 24H2 (Build 25921+), Microsoft removed legacy PC/AT timer drivers (RTC / 8254 PIT).
        - On systems where HPET is absent (e.g. nForce 3/4/500) or disabled in BIOS (e.g. some AMD 785G boards),
@@ -38,7 +44,7 @@ def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: b
         "cpuid_patched": False,
         "kiset_patched": False,
         "debug_loop_patched": False,
-        "pcat_clk_patched": False
+        "pcat_clk_patched": False,
     }
 
     # 1. CPUID Requirements Table Patch (Index 6: SSE4.2 Flags 0x0D -> 0x0C)
@@ -52,45 +58,53 @@ def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: b
             # Overwrite Flags byte at offset 16 from 0x0D to 0x0C
             data[req_idx + 16] = 0x0C
             report["cpuid_patched"] = True
-            print(f"[+] Patched CPUID requirements table entry at offset 0x{req_idx:X} (Flags: 0x0D -> 0x0C).")
+            print(
+                f"[+] Patched CPUID requirements table entry at offset 0x{req_idx:X} (Flags: 0x0D -> 0x0C)."
+            )
         else:
             idx_0c = data.find(req_sig_0c)
             if idx_0c != -1:
                 report["cpuid_patched"] = True
-                print(f"[*] Notice: CPUID requirements table entry at offset 0x{idx_0c:X} is already patched (Flags: 0x0C).")
+                print(
+                    f"[*] Notice: CPUID requirements table entry at offset 0x{idx_0c:X} is already patched (Flags: 0x0C)."
+                )
             else:
-                print("[-] Warning: Mandatory SSE4.2 CPUID requirement table entry (0x0D) not found in binary.")
+                print(
+                    "[-] Warning: Mandatory SSE4.2 CPUID requirement table entry (0x0D) not found in binary."
+                )
 
     # 2. KiSetFeatureBits CPU branch jump checks (Disabled by default)
     if patch_kiset:
         # Signature matching the 4 primary branch comparisons in KiSetFeatureBits
         pattern = re.compile(
-            b'\x3B\xC1' +               # cmp eax, ecx
-            b'\x0F\x85.{4}' +           # jne rel32
-            b'\x41\x0F\xBA\xE6\x0B' +   # bt r14d, 0Bh
-            b'\x0F\x83.{4}' +           # jnb/jae rel32
-            b'\x41\x0F\xBA\xE6\x14' +   # bt r14d, 14h
-            b'\x0F\x83.{4}' +           # jnb/jae rel32
-            b'\x41\x0F\xBA\xE5\x0D' +   # bt r13d, 0Dh
-            b'\x0F\x83.{4}',            # jnb/jae rel32
-            re.DOTALL
+            b"\x3b\xc1"  # cmp eax, ecx
+            + b"\x0f\x85.{4}"  # jne rel32
+            + b"\x41\x0f\xba\xe6\x0b"  # bt r14d, 0Bh
+            + b"\x0f\x83.{4}"  # jnb/jae rel32
+            + b"\x41\x0f\xba\xe6\x14"  # bt r14d, 14h
+            + b"\x0f\x83.{4}"  # jnb/jae rel32
+            + b"\x41\x0f\xba\xe5\x0d"  # bt r13d, 0Dh
+            + b"\x0f\x83.{4}",  # jnb/jae rel32
+            re.DOTALL,
         )
         matches = list(pattern.finditer(data))
         if matches:
             start = matches[0].start()
             # NOP out the 4 main 6-byte jumps
-            data[start + 2 : start + 8] = b'\x90' * 6
-            data[start + 13 : start + 19] = b'\x90' * 6
-            data[start + 24 : start + 30] = b'\x90' * 6
-            data[start + 35 : start + 41] = b'\x90' * 6
+            data[start + 2 : start + 8] = b"\x90" * 6
+            data[start + 13 : start + 19] = b"\x90" * 6
+            data[start + 24 : start + 30] = b"\x90" * 6
+            data[start + 35 : start + 41] = b"\x90" * 6
 
             # NOP out 5th and 6th jumps if they match standard offsets
             if data[start + 50] == 0x0F and data[start + 51] == 0x84:
-                data[start + 50 : start + 56] = b'\x90' * 6
+                data[start + 50 : start + 56] = b"\x90" * 6
             if data[start + 63] == 0x0F and data[start + 64] == 0x85:
-                data[start + 63 : start + 69] = b'\x90' * 6
+                data[start + 63 : start + 69] = b"\x90" * 6
             report["kiset_patched"] = True
-            print(f"[+] Patched KiSetFeatureBits conditional jumps at offset 0x{start:X}.")
+            print(
+                f"[+] Patched KiSetFeatureBits conditional jumps at offset 0x{start:X}."
+            )
         else:
             print("[-] Warning: KiSetFeatureBits CPU check signature not found.")
 
@@ -115,19 +129,25 @@ def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: b
 
             # Clean up following jb if present (short 72 ?? or near 0F 82 ?? ?? ?? ??)
             if data[idx + 13] == 0x72:
-                data[idx + 13 : idx + 15] = b'\x90\x90'
-            elif data[idx + 13 : idx + 15] == b'\x0F\x82':
-                data[idx + 13 : idx + 19] = b'\x90' * 6
+                data[idx + 13 : idx + 15] = b"\x90\x90"
+            elif data[idx + 13 : idx + 15] == b"\x0f\x82":
+                data[idx + 13 : idx + 19] = b"\x90" * 6
 
             report["pcat_clk_patched"] = True
-            print(f"[+] Patched HalpApicTimerIsInvariant AMD family check at offset 0x{idx:X} (pcat_clk_removal_workaround).")
+            print(
+                f"[+] Patched HalpApicTimerIsInvariant AMD family check at offset 0x{idx:X} (pcat_clk_removal_workaround)."
+            )
         else:
             already_idx = data.find(already_patched_sig)
             if already_idx != -1:
                 report["pcat_clk_patched"] = True
-                print(f"[*] Notice: HalpApicTimerIsInvariant is already patched at offset 0x{already_idx:X}.")
+                print(
+                    f"[*] Notice: HalpApicTimerIsInvariant is already patched at offset 0x{already_idx:X}."
+                )
             else:
-                print("[-] Warning: HalpApicTimerIsInvariant AMD family check signature not found.")
+                print(
+                    "[-] Warning: HalpApicTimerIsInvariant AMD family check signature not found."
+                )
 
     # 4. Optional KeBugCheckEx infinite loop patch (EB FE) for QEMU GDB debugging
     if enable_debug:
@@ -135,20 +155,25 @@ def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: b
             pe = pefile.PE(data=bytes(data))
             kbc_rva = None
             # Resolve exported KeBugCheckEx function dynamically from Export Directory
-            if hasattr(pe, 'DIRECTORY_ENTRY_EXPORT'):
+            if hasattr(pe, "DIRECTORY_ENTRY_EXPORT"):
                 for exp in pe.DIRECTORY_ENTRY_EXPORT.symbols:
-                    if exp.name and exp.name.decode('latin1', errors='ignore') == 'KeBugCheckEx':
+                    if (
+                        exp.name
+                        and exp.name.decode("latin1", errors="ignore") == "KeBugCheckEx"
+                    ):
                         kbc_rva = exp.address
                         break
             if not kbc_rva:
-                kbc_rva = 0x4F6880 # Standard RVA fallback
-                
+                kbc_rva = 0x4F6880  # Standard RVA fallback
+
             kbc_offset = pe.get_offset_from_rva(kbc_rva)
             pe.close()
             # Write JMP $ (EB FE) at the start of KeBugCheckEx
-            data[kbc_offset : kbc_offset + 2] = b'\xEB\xFE'
+            data[kbc_offset : kbc_offset + 2] = b"\xeb\xfe"
             report["debug_loop_patched"] = True
-            print(f"[+] Patched KeBugCheckEx at offset 0x{kbc_offset:X} (RVA 0x{kbc_rva:X}) to EB FE infinite loop.")
+            print(
+                f"[+] Patched KeBugCheckEx at offset 0x{kbc_offset:X} (RVA 0x{kbc_rva:X}) to EB FE infinite loop."
+            )
         except Exception as e:
             print(f"[-] Warning: Failed to patch KeBugCheckEx debug loop: {e}")
 
@@ -156,7 +181,16 @@ def patch_kernel_bytes(data: bytearray, patch_cpuid: bool = True, patch_kiset: b
 
 
 @register_patcher("kernel_sse42")
-def patch_kernel_file(input_path: str, output_path: str = None, patch_cpuid: bool = True, patch_kiset: bool = False, debug_loop: bool = False, enable_debug: bool = False, pcat_clk_removal_workaround: bool = False, **kwargs) -> bool:
+def patch_kernel_file(
+    input_path: str,
+    output_path: str = None,
+    patch_cpuid: bool = True,
+    patch_kiset: bool = False,
+    debug_loop: bool = False,
+    enable_debug: bool = False,
+    pcat_clk_removal_workaround: bool = False,
+    **kwargs,
+) -> bool:
     """
     Registered patch routine for Windows Kernel ('kernel_sse42').
     Reads the input binary, applies byte patches, writes output, and recalculates PE checksum.
@@ -178,7 +212,7 @@ def patch_kernel_file(input_path: str, output_path: str = None, patch_cpuid: boo
         patch_cpuid=patch_cpuid,
         patch_kiset=patch_kiset,
         enable_debug=is_debug,
-        pcat_clk_removal_workaround=pcat_clk_removal_workaround
+        pcat_clk_removal_workaround=pcat_clk_removal_workaround,
     )
 
     with open(output_path, "wb") as f:

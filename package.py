@@ -97,7 +97,7 @@ def check_dependencies(python_exe: str):
         for m in missing:
             print(f"    - {m}")
         print("\nPlease install them using:")
-        print(f"    \"{python_exe}\" -m pip install {' '.join(missing)}")
+        print(f'    "{python_exe}" -m pip install {" ".join(missing)}')
         sys.exit(1)
 
 
@@ -111,7 +111,7 @@ def build_executable(python_exe: str, root_dir: Path, build_dir: Path) -> Path:
         sys.exit(1)
 
     print(f"[*] Compiling {script_path.name} with Nuitka ({python_exe})...")
-    
+
     cmd = [
         python_exe,
         "-m",
@@ -135,7 +135,7 @@ def build_executable(python_exe: str, root_dir: Path, build_dir: Path) -> Path:
 
     print("[*] Running command:")
     print("    " + " ".join(cmd))
-    
+
     res = subprocess.run(cmd, cwd=root_dir)
     if res.returncode != 0:
         print(f"[-] Nuitka build failed with return code {res.returncode}")
@@ -201,7 +201,9 @@ def compile_readme_to_html(root_dir: Path) -> Path:
             mime_type, _ = mimetypes.guess_type(str(img_path))
             mime_type = mime_type or "image/png"
             b64_data = base64.b64encode(img_path.read_bytes()).decode("ascii")
-            print(f"    + Inlined image {img_src} as base64 ({img_path.stat().st_size:,} bytes)")
+            print(
+                f"    + Inlined image {img_src} as base64 ({img_path.stat().st_size:,} bytes)"
+            )
             return f'src="data:{mime_type};base64,{b64_data}"'
         return match.group(0)
 
@@ -316,7 +318,9 @@ def compile_readme_to_html(root_dir: Path) -> Path:
 
     out_path = root_dir / "README.html"
     out_path.write_text(full_html, encoding="utf-8")
-    print(f"[+] Successfully generated standalone {out_path.name} ({out_path.stat().st_size:,} bytes)")
+    print(
+        f"[+] Successfully generated standalone {out_path.name} ({out_path.stat().st_size:,} bytes)"
+    )
     return out_path
 
 
@@ -355,11 +359,15 @@ def create_release_zip(root_dir: Path, exe_path: Path, output_zip: Path):
             print(f"    + Adding {arcname} ({file_path.stat().st_size:,} bytes)")
             zf.write(file_path, arcname=arcname)
 
-    print(f"[+] Release package created successfully: {output_zip} ({output_zip.stat().st_size:,} bytes)")
+    print(
+        f"[+] Release package created successfully: {output_zip} ({output_zip.stat().st_size:,} bytes)"
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build and package WinPOPBit into a release zip archive.")
+    parser = argparse.ArgumentParser(
+        description="Build and package WinPOPBit into a release zip archive."
+    )
     parser.add_argument(
         "-o",
         "--output",
@@ -392,13 +400,17 @@ def main():
         if not exe_path.is_file():
             exe_path = root_dir / "winpopbit.exe"
         if not exe_path.is_file():
-            print(f"[-] Error: --skip-build specified but executable not found at {build_dir / 'winpopbit.exe'}")
+            print(
+                f"[-] Error: --skip-build specified but executable not found at {build_dir / 'winpopbit.exe'}"
+            )
             sys.exit(1)
     else:
         python_exe = args.python or find_python_38()
         if not python_exe:
             print("[-] Error: Python 3.8 executable could not be found.")
-            print("    Please install Python 3.8 or specify path using --python <path_to_python.exe>")
+            print(
+                "    Please install Python 3.8 or specify path using --python <path_to_python.exe>"
+            )
             sys.exit(1)
 
         print(f"[+] Using Python 3.8: {python_exe}")

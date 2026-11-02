@@ -8,7 +8,7 @@ def patch_winload_nx_bytes(
     data: bytearray,
     patch_nx: bool = True,
     patch_msr_fallback: bool = True,
-    patch_ci_filter: bool = False
+    patch_ci_filter: bool = False,
 ) -> tuple:
     """
     Applies the NX (No-Execute) compatibility patches to a raw 32-bit x86 winload.exe bytearray:
@@ -47,46 +47,64 @@ def patch_winload_nx_bytes(
 
     if patch_nx:
         # Match mov dword ptr [esp+...], 0x1A014
-        pattern_flag = re.compile(rb'(\xC7[\x44\x45].{1,2}\x14\xA0)\x01\x00')
-        pattern_already = re.compile(rb'(\xC7[\x44\x45].{1,2}\x14\xA0)\x00\x00')
+        pattern_flag = re.compile(rb"(\xC7[\x44\x45].{1,2}\x14\xA0)\x01\x00")
+        pattern_already = re.compile(rb"(\xC7[\x44\x45].{1,2}\x14\xA0)\x00\x00")
         m = pattern_flag.search(data)
         if m:
             idx = m.end() - 2
             data[idx] = 0x00
             report["nx_flag_patched"] = True
-            print(f"[+] Patched OslMain BlpLibraryParameters NX flag at offset 0x{idx:X} (0x1A014 -> 0x0A014).")
+            print(
+                f"[+] Patched OslMain BlpLibraryParameters NX flag at offset 0x{idx:X} (0x1A014 -> 0x0A014)."
+            )
         elif pattern_already.search(data):
             report["nx_flag_already_patched"] = True
-            print("[*] Notice: OslMain BlpLibraryParameters NX flag is already patched (0x0A014).")
+            print(
+                "[*] Notice: OslMain BlpLibraryParameters NX flag is already patched (0x0A014)."
+            )
         else:
-            print("[-] Warning: OslMain BlpLibraryParameters NX flag pattern (0x1A014) not found in winload.")
+            print(
+                "[-] Warning: OslMain BlpLibraryParameters NX flag pattern (0x1A014) not found in winload."
+            )
 
     if patch_msr_fallback:
         # ArchInitializeProcessorFeatures WRMSR: or eax, 0x800; ...; wrmsr
-        m1 = re.search(rb'\x0D\x00\x08\x00\x00.{1,15}\x0F\x30', data)
+        m1 = re.search(rb"\x0D\x00\x08\x00\x00.{1,15}\x0F\x30", data)
         if m1:
             wrmsr_idx = m1.end() - 2
-            data[wrmsr_idx : wrmsr_idx + 2] = b'\x90\x90'
+            data[wrmsr_idx : wrmsr_idx + 2] = b"\x90\x90"
             report["msr_init_patched"] = True
-            print(f"[+] NOPed out ArchInitializeProcessorFeatures EFER WRMSR at offset 0x{wrmsr_idx:X}.")
+            print(
+                f"[+] NOPed out ArchInitializeProcessorFeatures EFER WRMSR at offset 0x{wrmsr_idx:X}."
+            )
         else:
-            if re.search(rb'\x0D\x00\x08\x00\x00.{1,15}\x90\x90', data):
-                print("[*] Notice: ArchInitializeProcessorFeatures EFER WRMSR is already NOPed.")
+            if re.search(rb"\x0D\x00\x08\x00\x00.{1,15}\x90\x90", data):
+                print(
+                    "[*] Notice: ArchInitializeProcessorFeatures EFER WRMSR is already NOPed."
+                )
             else:
-                print("[-] Notice: ArchInitializeProcessorFeatures EFER WRMSR pattern not found.")
+                print(
+                    "[-] Notice: ArchInitializeProcessorFeatures EFER WRMSR pattern not found."
+                )
 
         # ArchRestoreProcessorFeatures WRMSR: and eax, ~0x800; wrmsr
-        m2 = re.search(rb'\x25\xFF\xF7\xFF\xFF\x0F\x30', data)
+        m2 = re.search(rb"\x25\xFF\xF7\xFF\xFF\x0F\x30", data)
         if m2:
             wrmsr_idx2 = m2.end() - 2
-            data[wrmsr_idx2 : wrmsr_idx2 + 2] = b'\x90\x90'
+            data[wrmsr_idx2 : wrmsr_idx2 + 2] = b"\x90\x90"
             report["msr_restore_patched"] = True
-            print(f"[+] NOPed out ArchRestoreProcessorFeatures EFER WRMSR at offset 0x{wrmsr_idx2:X}.")
+            print(
+                f"[+] NOPed out ArchRestoreProcessorFeatures EFER WRMSR at offset 0x{wrmsr_idx2:X}."
+            )
         else:
-            if re.search(rb'\x25\xFF\xF7\xFF\xFF\x90\x90', data):
-                print("[*] Notice: ArchRestoreProcessorFeatures EFER WRMSR is already NOPed.")
+            if re.search(rb"\x25\xFF\xF7\xFF\xFF\x90\x90", data):
+                print(
+                    "[*] Notice: ArchRestoreProcessorFeatures EFER WRMSR is already NOPed."
+                )
             else:
-                print("[-] Notice: ArchRestoreProcessorFeatures EFER WRMSR pattern not found.")
+                print(
+                    "[-] Notice: ArchRestoreProcessorFeatures EFER WRMSR pattern not found."
+                )
 
     if patch_ci_filter:
         filter_sig = bytes.fromhex("8BFF558BEC515153568BF2894DFC5733FF8BDE81FE280400C0")
@@ -94,12 +112,16 @@ def patch_winload_nx_bytes(
         if filter_idx != -1:
             data[filter_idx : filter_idx + 5] = bytes.fromhex("31C0C20400")
             report["ci_filter_patched"] = True
-            print(f"[+] Patched ImgpFilterValidationFailure at offset 0x{filter_idx:X} (31 C0 C2 04 00 -> force STATUS_SUCCESS).")
+            print(
+                f"[+] Patched ImgpFilterValidationFailure at offset 0x{filter_idx:X} (31 C0 C2 04 00 -> force STATUS_SUCCESS)."
+            )
         elif data.find(bytes.fromhex("31C0C20400")) != -1:
             report["ci_filter_already_patched"] = True
             print("[*] Notice: ImgpFilterValidationFailure is already patched.")
         else:
-            print("[-] Warning: ImgpFilterValidationFailure signature not found in winload.")
+            print(
+                "[-] Warning: ImgpFilterValidationFailure signature not found in winload."
+            )
 
     # 4. PTE / PDE XD Bit (Bit 63) Suppression:
     # Winload unconditionally sets bit 63 (0x80000000 in high DWORD) on read-only and data PTEs:
@@ -113,21 +135,29 @@ def patch_winload_nx_bytes(
         pte1_sig = bytes.fromhex("740681CA00000080")
         pte1_idx = data.find(pte1_sig)
         if pte1_idx != -1:
-            data[pte1_idx + 2 : pte1_idx + 8] = b'\x90' * 6
+            data[pte1_idx + 2 : pte1_idx + 8] = b"\x90" * 6
             report["pte1_xd_patched"] = True
-            print(f"[+] NOPed out MmPaepMapPhysicalAddress PTE XD bit 63 write at offset 0x{pte1_idx + 2:X}.")
+            print(
+                f"[+] NOPed out MmPaepMapPhysicalAddress PTE XD bit 63 write at offset 0x{pte1_idx + 2:X}."
+            )
         elif data.find(bytes.fromhex("7406909090909090")) != -1:
-            print("[*] Notice: MmPaepMapPhysicalAddress PTE XD bit 63 write is already NOPed.")
+            print(
+                "[*] Notice: MmPaepMapPhysicalAddress PTE XD bit 63 write is already NOPed."
+            )
 
         # Patch 2: MmPaeSetVirtualAddressRangeAttributes: 83 22 FD 81 4A 04 00 00 00 80 -> NOP 7 bytes
         pte2_sig = bytes.fromhex("8322FD814A0400000080")
         pte2_idx = data.find(pte2_sig)
         if pte2_idx != -1:
-            data[pte2_idx + 3 : pte2_idx + 10] = b'\x90' * 7
+            data[pte2_idx + 3 : pte2_idx + 10] = b"\x90" * 7
             report["pte2_xd_patched"] = True
-            print(f"[+] NOPed out MmPaeSetVirtualAddressRangeAttributes PTE XD bit 63 write at offset 0x{pte2_idx + 3:X}.")
+            print(
+                f"[+] NOPed out MmPaeSetVirtualAddressRangeAttributes PTE XD bit 63 write at offset 0x{pte2_idx + 3:X}."
+            )
         elif data.find(bytes.fromhex("8322FD90909090909090")) != -1:
-            print("[*] Notice: MmPaeSetVirtualAddressRangeAttributes PTE XD bit 63 write is already NOPed.")
+            print(
+                "[*] Notice: MmPaeSetVirtualAddressRangeAttributes PTE XD bit 63 write is already NOPed."
+            )
 
     return data, report
 
@@ -139,7 +169,7 @@ def patch_winload_nx_file(
     patch_nx: bool = True,
     patch_msr_fallback: bool = True,
     patch_ci_filter: bool = False,
-    **kwargs
+    **kwargs,
 ) -> bool:
     """
     Registered patch routine for Windows Boot Loader ('winload_nx').
@@ -160,7 +190,7 @@ def patch_winload_nx_file(
         data,
         patch_nx=patch_nx,
         patch_msr_fallback=patch_msr_fallback,
-        patch_ci_filter=patch_ci_filter
+        patch_ci_filter=patch_ci_filter,
     )
 
     with open(output_path, "wb") as f:

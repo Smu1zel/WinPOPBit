@@ -5,7 +5,13 @@ import shutil
 import re
 import urllib.request
 import shlex
-from .utils import get_app_dir, clear_readonly, safe_replace_file, take_ownership_and_grant, require_admin
+from .utils import (
+    get_app_dir,
+    clear_readonly,
+    safe_replace_file,
+    take_ownership_and_grant,
+    require_admin,
+)
 from .wim import WimMountSession
 from .database import BlobDatabase, DEFAULT_BCD_COMMANDS
 
@@ -31,7 +37,7 @@ def download_adk_oscdimg(target_dir: str) -> str:
     """
     Downloads the official Microsoft ADK oscdimg cabinet (~74 KB) directly from
     Microsoft CDN and extracts oscdimg.exe (x64 v2.56) using Windows built-in expand.exe.
-    
+
     This eliminates the need to bundle third-party copyrighted binaries or install
     the full 5 GB Windows ADK suite.
     """
@@ -47,7 +53,9 @@ def download_adk_oscdimg(target_dir: str) -> str:
     temp_extract = os.path.join(target_dir, "temp_expand")
 
     print("[*] Compatible oscdimg (v2.55+) not found locally.")
-    print("[*] Downloading official Microsoft ADK Deployment payload (~74 KB) from Microsoft CDN...")
+    print(
+        "[*] Downloading official Microsoft ADK Deployment payload (~74 KB) from Microsoft CDN..."
+    )
 
     req = urllib.request.Request(cab_url, headers={"User-Agent": "Burn"})
     try:
@@ -56,7 +64,11 @@ def download_adk_oscdimg(target_dir: str) -> str:
         print("[+] Download complete. Extracting oscdimg.exe using expand.exe...")
 
         os.makedirs(temp_extract, exist_ok=True)
-        subprocess.run(["expand.exe", temp_cab, "-F:*", temp_extract], check=True, stdout=subprocess.DEVNULL)
+        subprocess.run(
+            ["expand.exe", temp_cab, "-F:*", temp_extract],
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
 
         # Raw payload filename inside Microsoft ADK cabinet
         raw_payload = os.path.join(temp_extract, "fild40c79d789d460e48dc1cbd485d6fc2e")
@@ -66,15 +78,19 @@ def download_adk_oscdimg(target_dir: str) -> str:
             print(f"[+] Successfully extracted and configured: {out_exe} (v{ver})")
             return out_exe
         else:
-            raise RuntimeError("Expected payload binary not found in extracted cabinet.")
+            raise RuntimeError(
+                "Expected payload binary not found in extracted cabinet."
+            )
     except Exception as e:
         print(f"[-] Failed to download/extract ADK oscdimg from Microsoft CDN: {e}")
         return None
     finally:
         # Clean up temporary cabinet and extraction files
         if os.path.exists(temp_cab):
-            try: os.remove(temp_cab)
-            except Exception: pass
+            try:
+                os.remove(temp_cab)
+            except Exception:
+                pass
         if os.path.exists(temp_extract):
             shutil.rmtree(temp_extract, ignore_errors=True)
 
@@ -82,7 +98,7 @@ def download_adk_oscdimg(target_dir: str) -> str:
 def find_oscdimg(custom_path: str = None) -> str:
     """
     Locates the Microsoft CD/DVD mastering utility (oscdimg.exe).
-    
+
     1. Validates custom_path if specified (must be >= 2.55).
     2. Checks local ./tools/oscdimg.exe directory.
     3. Searches Windows ADK installations, MiniTool, and system PATH.
@@ -98,7 +114,9 @@ def find_oscdimg(custom_path: str = None) -> str:
         ver = get_oscdimg_version(custom_path)
         if ver >= 2.55:
             return custom_path
-        print(f"[-] Warning: Custom oscdimg at '{custom_path}' is version {ver} (< 2.55).")
+        print(
+            f"[-] Warning: Custom oscdimg at '{custom_path}' is version {ver} (< 2.55)."
+        )
 
     # 2. Local tools directory
     if os.path.exists(local_tool):
@@ -112,7 +130,7 @@ def find_oscdimg(custom_path: str = None) -> str:
         r"C:\Program Files\Windows Kits\10\Assessment and Deployment Kit\Deployment Tools\amd64\oscdimg.exe",
         r"C:\Program Files (x86)\Windows Kits\11\Assessment and Deployment Kit\Deployment Tools\amd64\oscdimg.exe",
         r"C:\Program Files\MiniTool Partition Wizard 13\oscdimg.exe",
-        r"C:\Program Files\MiniTool Partition Wizard 12\oscdimg.exe"
+        r"C:\Program Files\MiniTool Partition Wizard 12\oscdimg.exe",
     ]
     path_which = shutil.which("oscdimg.exe")
     if path_which and path_which not in candidates:
@@ -124,7 +142,9 @@ def find_oscdimg(custom_path: str = None) -> str:
             if ver >= 2.55:
                 return p
             else:
-                print(f"[-] Notice: Found oscdimg at '{p}' but version {ver} is too old (< 2.55). UEFI dual-boot requires v2.55+.")
+                print(
+                    f"[-] Notice: Found oscdimg at '{p}' but version {ver} is too old (< 2.55). UEFI dual-boot requires v2.55+."
+                )
 
     # 4. Automatic on-demand download from Microsoft CDN
     return download_adk_oscdimg(tools_dir)
@@ -139,7 +159,7 @@ def modify_bcd_stores(iso_files_dir: str, bcd_commands: list = None):
     """
     bcd_paths = [
         os.path.join(iso_files_dir, "boot", "bcd"),
-        os.path.join(iso_files_dir, "efi", "microsoft", "boot", "bcd")
+        os.path.join(iso_files_dir, "efi", "microsoft", "boot", "bcd"),
     ]
     commands_to_run = DEFAULT_BCD_COMMANDS if bcd_commands is None else bcd_commands
 
@@ -156,8 +176,12 @@ def modify_bcd_stores(iso_files_dir: str, bcd_commands: list = None):
                 if isinstance(item, (list, tuple)):
                     tokens = list(item)
                 else:
-                    tokens = [t[1:-1] if t.startswith('"') and t.endswith('"') and len(t) >= 2 else t
-                              for t in shlex.split(item.strip(), posix=False)]
+                    tokens = [
+                        t[1:-1]
+                        if t.startswith('"') and t.endswith('"') and len(t) >= 2
+                        else t
+                        for t in shlex.split(item.strip(), posix=False)
+                    ]
 
                 if not tokens:
                     continue
@@ -173,7 +197,9 @@ def modify_bcd_stores(iso_files_dir: str, bcd_commands: list = None):
 
                 cmd = ["bcdedit.exe", "/store", bcd] + tokens
                 print(f"  [+] bcdedit: {' '.join(tokens)}")
-                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                subprocess.run(
+                    cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
 
 
 def build_iso(
@@ -185,7 +211,7 @@ def build_iso(
     selected_index: int = None,
     boot_only: bool = False,
     clean: bool = False,
-    oscdimg_path: str = None
+    oscdimg_path: str = None,
 ):
     """
     Orchestrates the complete automated ISO build pipeline:
@@ -200,7 +226,9 @@ def build_iso(
 
     oscdimg_bin = find_oscdimg(oscdimg_path)
     if not oscdimg_bin:
-        print("[-] Error: 'oscdimg.exe' not found! Please install the Windows ADK or specify --oscdimg-path.")
+        print(
+            "[-] Error: 'oscdimg.exe' not found! Please install the Windows ADK or specify --oscdimg-path."
+        )
         sys.exit(1)
 
     print(f"[+] Using oscdimg: {oscdimg_bin}")
@@ -216,17 +244,29 @@ def build_iso(
     os.makedirs(re_mount_dir, exist_ok=True)
 
     # Clean up any lingering mountpoints and registry handles from previous runs
-    subprocess.run(["dism.exe", "/Cleanup-Mountpoints"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    subprocess.run(["reg.exe", "unload", "HKLM\\POP42_OfflineSystem"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(
+        ["dism.exe", "/Cleanup-Mountpoints"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["reg.exe", "unload", "HKLM\\POP42_OfflineSystem"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
     if clean and os.path.exists(iso_files_dir):
-        print(f"[*] --clean specified. Wiping existing ISO workspace files: {iso_files_dir}...")
+        print(
+            f"[*] --clean specified. Wiping existing ISO workspace files: {iso_files_dir}..."
+        )
         clear_readonly(iso_files_dir)
         shutil.rmtree(iso_files_dir, ignore_errors=True)
 
     # Extract or copy source ISO media
     sources_dir = os.path.join(iso_files_dir, "sources")
-    has_install = os.path.exists(os.path.join(sources_dir, "install.wim")) or os.path.exists(os.path.join(sources_dir, "install.esd"))
+    has_install = os.path.exists(
+        os.path.join(sources_dir, "install.wim")
+    ) or os.path.exists(os.path.join(sources_dir, "install.esd"))
 
     if has_install:
         print(f"[*] Reusing existing workspace ISO files in: {iso_files_dir}")
@@ -234,27 +274,55 @@ def build_iso(
         if input_iso.endswith(".iso") and os.path.exists(input_iso):
             print(f"[*] Mounting source ISO: {input_iso}...")
             ps_cmd = f"(Mount-DiskImage -ImagePath '{os.path.abspath(input_iso)}' -PassThru | Get-Volume).DriveLetter"
-            res = subprocess.run(["powershell", "-NoProfile", "-Command", ps_cmd], capture_output=True, text=True)
+            res = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_cmd],
+                capture_output=True,
+                text=True,
+            )
             drive_letter = res.stdout.strip()
             if not drive_letter or len(drive_letter) != 1:
                 print(f"[-] Error: Failed to mount source ISO: {input_iso}")
                 sys.exit(1)
-            
+
             source_drive = f"{drive_letter}:\\"
-            print(f"[+] ISO mounted at drive {source_drive}. Copying files with Robocopy...")
+            print(
+                f"[+] ISO mounted at drive {source_drive}. Copying files with Robocopy..."
+            )
             os.makedirs(iso_files_dir, exist_ok=True)
             # Multi-threaded copy of ISO filesystem
-            subprocess.run(["robocopy", source_drive, iso_files_dir, "/E", "/MT:8", "/R:1", "/W:1"], stdout=subprocess.DEVNULL)
-            
+            subprocess.run(
+                [
+                    "robocopy",
+                    source_drive,
+                    iso_files_dir,
+                    "/E",
+                    "/MT:8",
+                    "/R:1",
+                    "/W:1",
+                ],
+                stdout=subprocess.DEVNULL,
+            )
+
             # Dismount source ISO image
-            subprocess.run(["powershell", "-NoProfile", "-Command", f"Dismount-DiskImage -ImagePath '{os.path.abspath(input_iso)}'"], stdout=subprocess.DEVNULL)
-            
+            subprocess.run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    f"Dismount-DiskImage -ImagePath '{os.path.abspath(input_iso)}'",
+                ],
+                stdout=subprocess.DEVNULL,
+            )
+
             # Clear read-only attributes inherited from ISO filesystem
             clear_readonly(iso_files_dir)
         elif os.path.isdir(input_iso):
             print(f"[*] Copying ISO directory structure from: {input_iso}...")
             os.makedirs(iso_files_dir, exist_ok=True)
-            subprocess.run(["robocopy", input_iso, iso_files_dir, "/E", "/MT:8", "/R:1", "/W:1"], stdout=subprocess.DEVNULL)
+            subprocess.run(
+                ["robocopy", input_iso, iso_files_dir, "/E", "/MT:8", "/R:1", "/W:1"],
+                stdout=subprocess.DEVNULL,
+            )
             clear_readonly(iso_files_dir)
         else:
             print(f"[-] Error: Invalid input ISO path: {input_iso}")
@@ -267,9 +335,9 @@ def build_iso(
     if not os.path.exists(src_boot_wim):
         raise FileNotFoundError(f"boot.wim not found in {src_boot_wim}")
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("STEP 1: Patching boot.wim (Setup Environment)")
-    print("="*70)
+    print("=" * 70)
     clear_readonly(src_boot_wim)
     shutil.copy2(src_boot_wim, local_boot_wim)
     clear_readonly(local_boot_wim)
@@ -286,10 +354,10 @@ def build_iso(
     # PART 2: PATCH INSTALL IMAGE (install.wim / install.esd)
     # -------------------------------------------------------------------------
     if not boot_only:
-        print("\n" + "="*70)
+        print("\n" + "=" * 70)
         print("STEP 2: Patching Main OS Image (install.wim / install.esd)")
-        print("="*70)
-        
+        print("=" * 70)
+
         is_esd = False
         install_img = os.path.join(iso_files_dir, "sources", "install.wim")
         if not os.path.exists(install_img):
@@ -297,13 +365,22 @@ def build_iso(
             is_esd = True
 
         if not os.path.exists(install_img):
-            raise FileNotFoundError("Could not find install.wim or install.esd in sources!")
+            raise FileNotFoundError(
+                "Could not find install.wim or install.esd in sources!"
+            )
 
         clear_readonly(install_img)
 
         # Query all image indexes using DISM
-        info_res = subprocess.run(["dism.exe", "/English", "/Get-ImageInfo", f"/ImageFile:{install_img}"], capture_output=True, text=True)
-        found_indexes = [int(m.group(1)) for m in re.finditer(r"(?i)Index\s*:\s*(\d+)", info_res.stdout)]
+        info_res = subprocess.run(
+            ["dism.exe", "/English", "/Get-ImageInfo", f"/ImageFile:{install_img}"],
+            capture_output=True,
+            text=True,
+        )
+        found_indexes = [
+            int(m.group(1))
+            for m in re.finditer(r"(?i)Index\s*:\s*(\d+)", info_res.stdout)
+        ]
 
         if not found_indexes:
             raise RuntimeError(f"No indexes found in {install_img}")
@@ -312,13 +389,26 @@ def build_iso(
         print(f"[+] Target OS Indexes to patch: {target_indexes}")
 
         if is_esd:
-            print("[*] Detected read-only install.esd. Converting selected indexes to local install.wim...")
+            print(
+                "[*] Detected read-only install.esd. Converting selected indexes to local install.wim..."
+            )
             if os.path.exists(local_install_wim):
                 clear_readonly(local_install_wim)
                 os.remove(local_install_wim)
             for idx in target_indexes:
                 print(f"  [+] Exporting Index {idx}...")
-                subprocess.run(["dism.exe", "/English", "/Export-Image", f"/SourceImageFile:{install_img}", f"/SourceIndex:{idx}", f"/DestinationImageFile:{local_install_wim}", "/Compress:max"], check=True)
+                subprocess.run(
+                    [
+                        "dism.exe",
+                        "/English",
+                        "/Export-Image",
+                        f"/SourceImageFile:{install_img}",
+                        f"/SourceIndex:{idx}",
+                        f"/DestinationImageFile:{local_install_wim}",
+                        "/Compress:max",
+                    ],
+                    check=True,
+                )
             wim_indexes = list(range(1, len(target_indexes) + 1))
         else:
             shutil.copy2(install_img, local_install_wim)
@@ -328,17 +418,23 @@ def build_iso(
         # Mount and patch each selected OS index
         for idx in wim_indexes:
             print(f"\n[*] Mounting and patching install.wim Index {idx}...")
-            with WimMountSession(local_install_wim, index=idx, mount_dir=mount_dir) as session:
+            with WimMountSession(
+                local_install_wim, index=idx, mount_dir=mount_dir
+            ) as session:
                 session.apply_blobs(db, blobs_dir)
                 session.modify_offline_registry()
 
                 # Patch nested WinRE (Windows Recovery Environment) inside the OS image
-                winre_path = os.path.join(mount_dir, "Windows", "System32", "Recovery", "winre.wim")
+                winre_path = os.path.join(
+                    mount_dir, "Windows", "System32", "Recovery", "winre.wim"
+                )
                 if os.path.exists(winre_path):
                     take_ownership_and_grant(winre_path)
                     clear_readonly(winre_path)
                     print(f"  [*] Patching nested Recovery Image (winre.wim)...")
-                    with WimMountSession(winre_path, index=1, mount_dir=re_mount_dir) as re_session:
+                    with WimMountSession(
+                        winre_path, index=1, mount_dir=re_mount_dir
+                    ) as re_session:
                         re_session.apply_blobs(db, blobs_dir)
                         re_session.modify_offline_registry()
                         re_session.commit()
@@ -348,7 +444,7 @@ def build_iso(
         # Replace the original install image in the ISO folder
         if is_esd:
             clear_readonly(install_img)
-            os.remove(install_img) # Remove original install.esd
+            os.remove(install_img)  # Remove original install.esd
         dest_install_wim = os.path.join(iso_files_dir, "sources", "install.wim")
         safe_replace_file(local_install_wim, dest_install_wim)
         print("[+] Install image patch complete.")
@@ -356,17 +452,17 @@ def build_iso(
     # -------------------------------------------------------------------------
     # PART 3: BCD STORES CONFIGURATION
     # -------------------------------------------------------------------------
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("STEP 3: Modifying ISO BCD Stores")
-    print("="*70)
+    print("=" * 70)
     modify_bcd_stores(iso_files_dir, db.bcd_commands if db else None)
 
     # -------------------------------------------------------------------------
     # PART 4: REBUILD BOOTABLE ISO
     # -------------------------------------------------------------------------
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print("STEP 4: Rebuilding Dual-Boot (UEFI + BIOS) ISO")
-    print("="*70)
+    print("=" * 70)
     etfsboot = os.path.join(iso_files_dir, "boot", "etfsboot.com")
     efisys = os.path.join(iso_files_dir, "efi", "microsoft", "boot", "efisys.bin")
 
@@ -381,7 +477,7 @@ def build_iso(
         "-udfver102",
         f"-bootdata:2#p0,e,b{etfsboot}#pEF,e,b{efisys}",
         iso_files_dir,
-        output_iso
+        output_iso,
     ]
 
     print(f"[*] Running oscdimg to generate: {output_iso}...")
@@ -391,7 +487,7 @@ def build_iso(
     shutil.rmtree(mount_dir, ignore_errors=True)
     shutil.rmtree(re_mount_dir, ignore_errors=True)
 
-    print("\n" + "="*70)
+    print("\n" + "=" * 70)
     print(f"SUCCESS: Patched ISO built successfully!")
     print(f"Output File: {os.path.abspath(output_iso)}")
-    print("="*70)
+    print("=" * 70)
