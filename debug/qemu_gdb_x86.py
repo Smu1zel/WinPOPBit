@@ -7,6 +7,7 @@ import time
 
 try:
     import capstone
+
     HAS_CAPSTONE = True
 except ImportError:
     HAS_CAPSTONE = False
@@ -29,26 +30,47 @@ h_process = kernel32.GetCurrentProcess()
 
 dbghelp.SymInitialize.argtypes = [HANDLE, PCSTR, BOOL]
 dbghelp.SymInitialize.restype = BOOL
-dbghelp.SymLoadModuleEx.argtypes = [HANDLE, HANDLE, PCSTR, PCSTR, DWORD64, DWORD, ctypes.c_void_p, DWORD]
+dbghelp.SymLoadModuleEx.argtypes = [
+    HANDLE,
+    HANDLE,
+    PCSTR,
+    PCSTR,
+    DWORD64,
+    DWORD,
+    ctypes.c_void_p,
+    DWORD,
+]
 dbghelp.SymLoadModuleEx.restype = DWORD64
+
 
 class SYMBOL_INFO(ctypes.Structure):
     _fields_ = [
-        ("SizeOfStruct", ULONG), ("TypeIndex", ULONG),
-        ("Reserved", ULONG64 * 2), ("Index", ULONG),
-        ("Size", ULONG), ("ModBase", ULONG64),
-        ("Flags", ULONG), ("Value", ULONG64),
-        ("Address", ULONG64), ("Register", ULONG),
-        ("Scope", ULONG), ("Tag", ULONG),
-        ("NameLen", ULONG), ("MaxNameLen", ULONG),
-        ("Name", CHAR * 2048)
+        ("SizeOfStruct", ULONG),
+        ("TypeIndex", ULONG),
+        ("Reserved", ULONG64 * 2),
+        ("Index", ULONG),
+        ("Size", ULONG),
+        ("ModBase", ULONG64),
+        ("Flags", ULONG),
+        ("Value", ULONG64),
+        ("Address", ULONG64),
+        ("Register", ULONG),
+        ("Scope", ULONG),
+        ("Tag", ULONG),
+        ("NameLen", ULONG),
+        ("MaxNameLen", ULONG),
+        ("Name", CHAR * 2048),
     ]
 
-EnumSymCallback = ctypes.WINFUNCTYPE(BOOL, ctypes.POINTER(SYMBOL_INFO), ULONG, ctypes.c_void_p)
+
+EnumSymCallback = ctypes.WINFUNCTYPE(
+    BOOL, ctypes.POINTER(SYMBOL_INFO), ULONG, ctypes.c_void_p
+)
+
 
 class SymbolResolver:
     def __init__(self, pdb_dir: str, pe_name: str = "ntoskrnl.exe"):
-        self.symbols = [] # (rva, name)
+        self.symbols = []  # (rva, name)
         self.base_loaded = 0x10000000
         pe_path = os.path.join(pdb_dir, pe_name)
         if not os.path.exists(pe_path):
@@ -59,20 +81,37 @@ class SymbolResolver:
         dbghelp.SymCleanup(h_process)
         dbghelp.SymInitialize(h_process, pdb_dir.encode("utf-8"), False)
         dbghelp.SymSetOptions(0x2 | 0x4)
-        mod_base = dbghelp.SymLoadModuleEx(h_process, None, pe_path.encode("utf-8"), None, self.base_loaded, pe_size, None, 0)
+        mod_base = dbghelp.SymLoadModuleEx(
+            h_process,
+            None,
+            pe_path.encode("utf-8"),
+            None,
+            self.base_loaded,
+            pe_size,
+            None,
+            0,
+        )
         if not mod_base:
             print(f"[-] Warning: Failed to load symbols for {pe_path}")
             return
 
         def _enum_cb(p_sym, size, ctx):
             s = p_sym.contents
-            name = s.Name[:s.NameLen].decode("utf-8", errors="ignore")
+            name = s.Name[: s.NameLen].decode("utf-8", errors="ignore")
             rva = s.Address - self.base_loaded
             self.symbols.append((rva, name))
             return True
 
-        dbghelp.SymEnumSymbols.argtypes = [HANDLE, ULONG64, PCSTR, EnumSymCallback, ctypes.c_void_p]
-        dbghelp.SymEnumSymbols(h_process, ctypes.c_uint64(mod_base), b"*", EnumSymCallback(_enum_cb), None)
+        dbghelp.SymEnumSymbols.argtypes = [
+            HANDLE,
+            ULONG64,
+            PCSTR,
+            EnumSymCallback,
+            ctypes.c_void_p,
+        ]
+        dbghelp.SymEnumSymbols(
+            h_process, ctypes.c_uint64(mod_base), b"*", EnumSymCallback(_enum_cb), None
+        )
         self.symbols.sort(key=lambda x: x[0])
         print(f"[+] Loaded {len(self.symbols)} symbols from PDB.")
 
@@ -106,10 +145,12 @@ def make_gdb_packet(data: bytes) -> bytes:
     checksum = sum(data) % 256
     return f"${data.decode('latin1')}#{checksum:02X}".encode("latin1")
 
+
 def parse_gdb_packet(packet: bytes) -> bytes:
     if not packet.startswith(b"$") or b"#" not in packet:
         return b""
     return packet.split(b"#")[0][1:]
+
 
 class QemuGdbClient:
     def __init__(self, host: str = "127.0.0.1", port: int = 1234):
@@ -157,15 +198,27 @@ class QemuGdbClient:
     def read_registers_32(self) -> dict:
         raw_hex = self.cmd(b"g").decode("latin1")
         reg_names = [
-            "EAX", "ECX", "EDX", "EBX",
-            "ESP", "EBP", "ESI", "EDI",
-            "EIP", "EFLAGS", "CS", "SS",
-            "DS", "ES", "FS", "GS"
+            "EAX",
+            "ECX",
+            "EDX",
+            "EBX",
+            "ESP",
+            "EBP",
+            "ESI",
+            "EDI",
+            "EIP",
+            "EFLAGS",
+            "CS",
+            "SS",
+            "DS",
+            "ES",
+            "FS",
+            "GS",
         ]
         raw_bytes = bytes.fromhex(raw_hex[:128])
         regs = {}
         for i, name in enumerate(reg_names):
-            val = int.from_bytes(raw_bytes[i*4 : (i+1)*4], "little")
+            val = int.from_bytes(raw_bytes[i * 4 : (i + 1) * 4], "little")
             regs[name] = val
         return regs
 
@@ -205,7 +258,7 @@ class QemuGdbClient:
 def find_kernel_base(gdb: QemuGdbClient, hint_addr: int) -> int:
     """Walks backwards from a code address in memory to find the PE 'MZ' header."""
     curr = hint_addr & ~0xFFF
-    for _ in range(5000): # Scan up to ~20 MB backwards
+    for _ in range(5000):  # Scan up to ~20 MB backwards
         mem = gdb.read_memory(curr, 0x40)
         if len(mem) >= 0x40 and mem[:2] == b"MZ":
             e_lfanew = int.from_bytes(mem[0x3C:0x40], "little")
@@ -218,9 +271,9 @@ def find_kernel_base(gdb: QemuGdbClient, hint_addr: int) -> int:
 
 
 def dump_machine_state():
-    print("="*78)
+    print("=" * 78)
     print(" WinPOPBit QEMU GDB Live Debugger (x86 32-bit)")
-    print("="*78)
+    print("=" * 78)
 
     # 1. Load PDB symbols
     nx_dir = os.path.abspath("nx_work")
@@ -246,10 +299,16 @@ def dump_machine_state():
     ebp = regs["EBP"]
 
     print("\n[+] General Purpose Registers (32-bit):")
-    print(f"  EAX: 0x{regs['EAX']:08X}   ECX: 0x{regs['ECX']:08X}   EDX: 0x{regs['EDX']:08X}   EBX: 0x{regs['EBX']:08X}")
-    print(f"  ESP: 0x{regs['ESP']:08X}   EBP: 0x{regs['EBP']:08X}   ESI: 0x{regs['ESI']:08X}   EDI: 0x{regs['EDI']:08X}")
+    print(
+        f"  EAX: 0x{regs['EAX']:08X}   ECX: 0x{regs['ECX']:08X}   EDX: 0x{regs['EDX']:08X}   EBX: 0x{regs['EBX']:08X}"
+    )
+    print(
+        f"  ESP: 0x{regs['ESP']:08X}   EBP: 0x{regs['EBP']:08X}   ESI: 0x{regs['ESI']:08X}   EDI: 0x{regs['EDI']:08X}"
+    )
     print(f"  EIP: 0x{regs['EIP']:08X}   EFLAGS: 0x{regs['EFLAGS']:08X}")
-    print(f"  CS:  0x{regs['CS']:04X}       DS:  0x{regs['DS']:04X}       ES:  0x{regs['ES']:04X}       SS:  0x{regs['SS']:04X}")
+    print(
+        f"  CS:  0x{regs['CS']:04X}       DS:  0x{regs['DS']:04X}       ES:  0x{regs['ES']:04X}       SS:  0x{regs['SS']:04X}"
+    )
 
     # 4. Monitor control registers (CR0, CR3, CR4, EFER)
     print("\n[+] QEMU Control Registers & MSR Status:")
@@ -270,11 +329,13 @@ def dump_machine_state():
         print("[-] Could not locate MZ header directly above EIP. Scanning stack...")
         stack_sample = gdb.read_memory(esp, 0x100)
         for i in range(0, len(stack_sample), 4):
-            val = int.from_bytes(stack_sample[i:i+4], "little")
+            val = int.from_bytes(stack_sample[i : i + 4], "little")
             if val > 0x80000000:
                 kbase = find_kernel_base(gdb, val)
                 if kbase:
-                    print(f"[+] Found ntoskrnl.exe Base Address via stack: 0x{kbase:08X}")
+                    print(
+                        f"[+] Found ntoskrnl.exe Base Address via stack: 0x{kbase:08X}"
+                    )
                     break
 
     # 6. Disassemble Current Instruction at EIP
@@ -291,7 +352,9 @@ def dump_machine_state():
                 sym_name, diff = resolver.resolve_rva(rva)
                 if sym_name != "Unknown":
                     sym_str = f" <{sym_name}+0x{diff:X}>"
-            print(f"  {marker} 0x{insn.address:08X}: {insn.mnemonic:8s} {insn.op_str:20s}{sym_str}")
+            print(
+                f"  {marker} 0x{insn.address:08X}: {insn.mnemonic:8s} {insn.op_str:20s}{sym_str}"
+            )
     elif eip_code:
         print(f"  Raw Bytes: {eip_code.hex()}")
 
@@ -299,7 +362,9 @@ def dump_machine_state():
     if kbase:
         eip_rva = eip - kbase
         sym_name, diff = resolver.resolve_rva(eip_rva)
-        print(f"\n[+] Execution Location: {sym_name} + 0x{diff:X} (RVA: 0x{eip_rva:08X})")
+        print(
+            f"\n[+] Execution Location: {sym_name} + 0x{diff:X} (RVA: 0x{eip_rva:08X})"
+        )
         if "BugCheck" in sym_name or "KiTrap" in sym_name:
             print("\n[!] BUGCHECK / TRAP DETECTED!")
             # BugCheck parameters are sitting on stack at [esp], [esp+4], [esp+8], etc.
@@ -310,15 +375,17 @@ def dump_machine_state():
                 p2 = int.from_bytes(args[8:12], "little")
                 p3 = int.from_bytes(args[12:16], "little")
                 p4 = int.from_bytes(args[16:20], "little")
-                print(f"  Stack Frame: 0x{p0:08X} 0x{p1:08X} 0x{p2:08X} 0x{p3:08X} 0x{p4:08X}")
+                print(
+                    f"  Stack Frame: 0x{p0:08X} 0x{p1:08X} 0x{p2:08X} 0x{p3:08X} 0x{p4:08X}"
+                )
 
     # 8. Dump Call Stack
     print("\n[+] Call Stack (from ESP 0x{:08X}):".format(esp))
-    stack_bytes = gdb.read_memory(esp, 0x180) # Read 384 bytes (96 DWORDs)
+    stack_bytes = gdb.read_memory(esp, 0x180)  # Read 384 bytes (96 DWORDs)
     if stack_bytes:
         for i in range(0, len(stack_bytes), 4):
             addr = esp + i
-            val = int.from_bytes(stack_bytes[i:i+4], "little")
+            val = int.from_bytes(stack_bytes[i : i + 4], "little")
             sym_desc = ""
             if kbase and (kbase <= val <= kbase + 0x2000000):
                 rva = val - kbase
@@ -327,9 +394,11 @@ def dump_machine_state():
                     sym_desc = f" -> {sym_name} + 0x{diff:X} (RVA: 0x{rva:08X})"
             print(f"  ESP+0x{i:03X} [0x{addr:08X}]: 0x{val:08X}{sym_desc}")
 
-    print("\n" + "="*78)
-    print("Debug dump complete. Press [Enter] to resume VM execution, or Ctrl-C to quit.")
-    print("="*78)
+    print("\n" + "=" * 78)
+    print(
+        "Debug dump complete. Press [Enter] to resume VM execution, or Ctrl-C to quit."
+    )
+    print("=" * 78)
     try:
         input()
         print("[*] Resuming VM execution...")
@@ -339,6 +408,7 @@ def dump_machine_state():
     finally:
         gdb.close()
         dbghelp.SymCleanup(h_process)
+
 
 if __name__ == "__main__":
     dump_machine_state()
