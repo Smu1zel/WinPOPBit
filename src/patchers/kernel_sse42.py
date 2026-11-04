@@ -10,11 +10,12 @@ def patch_kernel_bytes(
     data: bytearray,
     patch_cpuid: bool = True,
     patch_kiset: bool = False,
+    patch_nforce_hpet_blacklist: bool = True,
+    pcat_clk_removal_workaround: bool = False,
     enable_debug: bool = False,
-    pcat_clk_removal_workaround: bool = True,
 ) -> tuple:
     """
-    Applies the core WinPOPBit kernel modifications to a raw ntoskrnl.exe bytearray:
+    Applies the core WinPOPBit Windows 11 kernel modifications to a raw ntoskrnl.exe bytearray:
 
     1. CPUID Requirements Table Patch (SSE4.2 Flags 0x0D -> 0x0C):
        - Leaf: 1, Subleaf: 0, Mask: 0x00100000 (Bit 20: SSE4.2), Register: 2 (ECX), Flags: 0x0000000D
@@ -25,9 +26,18 @@ def patch_kernel_bytes(
        - NOPs out hardcoded conditional branches in KiSetFeatureBits that guard processor feature bits.
        - Disabled by default since the CPUID table patch is sufficient for modern 24H2 builds.
 
-    3. PC/AT Clock Removal Workaround (Enabled by default):
-       - In Windows 11 24H2 (Build 25921+), Microsoft removed legacy PC/AT timer drivers (RTC / 8254 PIT).
-       - On systems where HPET is absent (e.g. nForce 3/4/500) or disabled in BIOS (e.g. some AMD 785G boards),
+    3. nForce / NVIDIA HPET Blacklist Removal Patch (Enabled by default):
+       - In HalpHpetDiscover, Microsoft hardcoded a check for NVIDIA's PCI Vendor ID (0x10DE) in the
+         HPET General Capabilities & ID register (GCAP_ID): 'cmp ebx, 0x10DE'.
+       - When matched, Windows skips the comparator enumeration loop and registers the HPET as only
+         a passive counter (Capabilities = 2), refusing to register its interrupt timers (Capabilities = 0x30).
+       - In 24H2, because legacy RTC and 8254 PIT were removed, this leaves nForce boards without any
+         functional platform clock source, causing BugCheck 0x5C.
+       - Patching 'cmp ebx, 0x10DE' to 'cmp ebx, 0x0000' un-blacklists NVIDIA's HPET comparators,
+         allowing Windows to discover and use all HPET timer channels natively.
+
+    4. PC/AT Clock Removal Workaround (Optional, disabled by default):
+       - On systems where physical HPET hardware is entirely absent (e.g. nForce 3/4/500),
          the kernel requires an Invariant Local APIC timer as the clock source.
        - HalpApicTimerIsInvariant checks if AMD CPU Family >= 0x15 (Bulldozer). Older AMD CPUs (K8, K10 Phenom/Athlon)
          fail this check (Family 0x0F/0x10), causing HalpTimerFindIdealClockSource to return NULL and BugCheck 0x5C
@@ -35,7 +45,7 @@ def patch_kernel_bytes(
        - Patches the AMD family check in HalpApicTimerIsInvariant to return 1 (True), allowing the Local APIC timer
          to be registered as invariant and used as the clock source regardless of CPUID family.
 
-    4. KeBugCheckEx Debug Loop Patch (Optional, disabled by default):
+    5. KeBugCheckEx Debug Loop Patch (Optional, disabled by default):
        - Overwrites the first 2 bytes of KeBugCheckEx with 'EB FE' (jmp $, infinite loop).
        - Allows attaching QEMU GDB debugger (via qemu_gdb_debugger.py) when a BugCheck 0x5D occurs
          to inspect live guest registers, walk the call stack, and read the failed requirement entry.
@@ -43,8 +53,9 @@ def patch_kernel_bytes(
     report = {
         "cpuid_patched": False,
         "kiset_patched": False,
-        "debug_loop_patched": False,
+        "nforce_hpet_blacklist_patched": False,
         "pcat_clk_patched": False,
+        "debug_loop_patched": False,
     }
 
     # 1. CPUID Requirements Table Patch (Index 6: SSE4.2 Flags 0x0D -> 0x0C)
@@ -108,7 +119,33 @@ def patch_kernel_bytes(
         else:
             print("[-] Warning: KiSetFeatureBits CPU check signature not found.")
 
-    # 3. PC/AT Legacy Timer Removal Workaround (HalpApicTimerIsInvariant AMD family check)
+    # 3. nForce / NVIDIA HPET Blacklist Removal Patch (HalpHpetDiscover)
+    if patch_nforce_hpet_blacklist:
+        # Signature: cmp ebx, 0x10DE (81 FB DE 10 00 00)
+        hpet_sig = bytes.fromhex("81FBDE100000")
+        hpet_already_patched_sig = bytes.fromhex("81FB00000000")
+
+        idx = data.find(hpet_sig)
+        if idx != -1:
+            # Overwrite 0x10DE with 0x0000 so the check never matches NVIDIA
+            data[idx : idx + 6] = bytearray(hpet_already_patched_sig)
+            report["nforce_hpet_blacklist_patched"] = True
+            print(
+                f"[+] Patched HalpHpetDiscover NVIDIA HPET blacklist at offset 0x{idx:X} (0x10DE -> 0x0000)."
+            )
+        else:
+            already_idx = data.find(hpet_already_patched_sig)
+            if already_idx != -1:
+                report["nforce_hpet_blacklist_patched"] = True
+                print(
+                    f"[*] Notice: HalpHpetDiscover NVIDIA HPET blacklist at offset 0x{already_idx:X} is already patched."
+                )
+            else:
+                print(
+                    "[-] Warning: HalpHpetDiscover NVIDIA HPET blacklist signature (0x10DE) not found."
+                )
+
+    # 4. PC/AT Legacy Timer Removal Workaround (HalpApicTimerIsInvariant AMD family check)
     if pcat_clk_removal_workaround:
         # Signature: mov rax, qword ptr gs:[0x20]; cmp byte ptr [rax + 0x40], 0x15
         # 65 48 8B 04 25 20 00 00 00 (mov rax, gs:[20h])
@@ -149,7 +186,7 @@ def patch_kernel_bytes(
                     "[-] Warning: HalpApicTimerIsInvariant AMD family check signature not found."
                 )
 
-    # 4. Optional KeBugCheckEx infinite loop patch (EB FE) for QEMU GDB debugging
+    # 5. Optional KeBugCheckEx infinite loop patch (EB FE) for QEMU GDB debugging
     if enable_debug:
         try:
             pe = pefile.PE(data=bytes(data))
@@ -186,9 +223,10 @@ def patch_kernel_file(
     output_path: str = None,
     patch_cpuid: bool = True,
     patch_kiset: bool = False,
+    patch_nforce_hpet_blacklist: bool = True,
+    pcat_clk_removal_workaround: bool = False,
     debug_loop: bool = False,
     enable_debug: bool = False,
-    pcat_clk_removal_workaround: bool = False,
     **kwargs,
 ) -> bool:
     """
@@ -211,8 +249,9 @@ def patch_kernel_file(
         data,
         patch_cpuid=patch_cpuid,
         patch_kiset=patch_kiset,
-        enable_debug=is_debug,
+        patch_nforce_hpet_blacklist=patch_nforce_hpet_blacklist,
         pcat_clk_removal_workaround=pcat_clk_removal_workaround,
+        enable_debug=is_debug,
     )
 
     with open(output_path, "wb") as f:
