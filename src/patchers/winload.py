@@ -2,6 +2,7 @@ import os
 import re
 from . import register_patcher
 from .pe import fix_pe_checksum
+from .prefetch import neutralize_prefetchw
 
 
 def patch_winload_bytes(
@@ -25,6 +26,7 @@ def patch_winload_bytes(
         "ci_filter_already_patched": False,
         "nointegritychecks_patched": False,
         "testsigning_patched": False,
+        "prefetchw_sites": 0,
     }
 
     # 1. Patch ImgpFilterValidationFailure
@@ -86,8 +88,23 @@ def patch_winload_bytes(
                     break
         else:
             print("[-] Notice: testsigning (0x260000E1) removal signature not found.")
-
+ 
+        # 3. Neutralise PREFETCHW (0F 0D /1 -> 0F 1F /0)
+        #    Pentium 4 (Prescott) and the first-generation Socket 754 Athlon 64
+        #    raise #UD on PREFETCHW.  winload executes it long before the kernel
+        #    installs an exception handler, so the machine just resets - no
+        #    bugcheck, no dump, no bootlog entry.  QEMU masks this because it
+        #    decodes 0F 0D as a NOP regardless of CPUID.
+        prefetch_hits = neutralize_prefetchw(data)
+        report["prefetchw_sites"] = len(prefetch_hits)
+        if prefetch_hits:
+            print(
+                f"[+] Neutralised {len(prefetch_hits)} PREFETCHW site(s) "
+                f"(0F 0D /1 -> NOP)."
+            )
+            
     return data, report
+    
 
 
 @register_patcher("winload")
