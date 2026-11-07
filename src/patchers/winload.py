@@ -6,7 +6,10 @@ from .prefetch import neutralize_prefetchw
 
 
 def patch_winload_bytes(
-    data: bytearray, patch_ci_filter: bool = True, patch_boot_options: bool = True
+    data: bytearray,
+    patch_ci_filter: bool = True,
+    patch_boot_options: bool = True,
+    verify_prefetchw: bool = False,
 ) -> tuple:
     """
     Applies the winload Code Integrity (CI) and boot options bypass modifications:
@@ -95,7 +98,7 @@ def patch_winload_bytes(
     #    installs an exception handler, so the machine just resets - no
     #    bugcheck, no dump, no bootlog entry.  QEMU masks this because it
     #    decodes 0F 0D as a NOP regardless of CPUID.
-    prefetch_hits = neutralize_prefetchw(data)
+    prefetch_hits = neutralize_prefetchw(data, verify=verify_prefetchw)
     report["prefetchw_sites"] = len(prefetch_hits)
     if prefetch_hits:
         print(
@@ -132,7 +135,7 @@ def patch_winload_file(
         data = bytearray(f.read())
 
     modified_data, report = patch_winload_bytes(
-        data, patch_ci_filter, patch_boot_options
+        data, patch_ci_filter, patch_boot_options, verify_prefetchw
     )
 
     with open(output_path, "wb") as f:
