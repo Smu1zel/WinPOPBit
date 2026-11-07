@@ -286,7 +286,12 @@ def _install_trampoline(data, shim_rva, blob_name, handler_rva, handler_back,
             _write_blob(data, lahf_path, lahf_rva)
             report["lahf_stub_installed"] = True
 
-    _write_blob(data, tramp_path, tramp_rva)
+        _extend_section(data, tramp_rva, len(tramp))
+    off = _rva_to_off(data, tramp_rva)
+    if off is None:
+        print(f"[-] trampoline RVA 0x{tramp_rva:X} is not mapped.")
+        return False
+    data[off:off + len(tramp)] = tramp
 
     h = int(handler_rva, 16)
     off = _rva_to_off(data, h)
