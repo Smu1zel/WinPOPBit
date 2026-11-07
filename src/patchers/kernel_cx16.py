@@ -16,18 +16,29 @@ THUNK_TABLES = {
                  "r8d10": 0xEA, "r8d20": 0xF5, "r8d100": 0x100, "r8d150": 0x10E},
     "shim_1909.bin": {"rdi": 0x99, "rdi20": 0xA3, "rsi": 0xAE, "r8d20": 0xB8,
                       "r8d150": 0xC3, "r10": 0xD1, "r11": 0xDB, "r14": 0xE5},
+    # nesting-aware lock (owner + depth); correct on SMP
+    "shim_nest.bin": {"rdi": 0xA8, "rsi": 0xB2, "r8": 0xBC, "r10": 0xC6,
+                      "r11": 0xD0, "r14": 0xDA, "r15": 0xE4, "rdi20": 0xEE,
+                      "r9d20": 0xF9, "r8d10": 0x104, "r8d20": 0x10F,
+                      "r8d100": 0x11A, "r8d150": 0x128},
+    # diagnostic variant without the inter-CPU lock (single-core only)
+    "shim_nolock.bin": {"rdi": 0x55, "rsi": 0x5C, "r8": 0x63, "r10": 0x6A,
+                        "r11": 0x71, "r14": 0x78, "r15": 0x7F, "rdi20": 0x89,
+                        "r8d10": 0x94, "r8d20": 0x9F, "r8d100": 0xAA,
+                        "r8d150": 0xB8},
 }
 
 # instruction length of each replaced form (call + NOP padding)
 SITE_LEN = {"r8": 5, "rdi": 5, "rsi": 5, "r10": 5, "r11": 5, "r14": 5,
             "r15": 5, "rdi20": 6, "r8d10": 6, "r8d20": 6,
-            "r8d100": 9, "r8d150": 9}
+            "r8d100": 9, "r8d150": 9, "r9d20": 6}
 
 
 def patch_kernel_cx16_bytes(
     data: bytearray,
     patch_cpuid: bool = True,
     patch_prefetchw_flag: bool = True,
+    verify_prefetchw: bool = False,
     gates: str = "",
     sites: str = "",
     shim_blob: str = "",
@@ -149,7 +160,7 @@ def patch_kernel_cx16_bytes(
 
     # 2. PREFETCHW everywhere
     if patch_prefetchw_flag:
-        hits = neutralize_prefetchw(data)
+        hits = neutralize_prefetchw(data, verify=verify_prefetchw)
         report["prefetchw_sites"] = len(hits)
         if hits:
             print(f"[+] Neutralised {len(hits)} PREFETCHW site(s) (0F 0D /1 -> NOP).")
@@ -186,6 +197,7 @@ def patch_kernel_cx16_bytes(
             print(f"[-] unknown shim blob '{blob_name}'.")
             return data, report
 
+        _extend_section(data, int(lock_rva, 16), 16)
         _write_blob(data, shim_path, shim_rva, int(lock_rva, 16), patch_lock=True)
 
         if tramp_blob:
@@ -226,6 +238,54 @@ def _rva_to_off(data, rva):
     return None
 
 
+
+def _extend_section(data, rva, length):
+    """Make sure `rva`..`rva+length` is inside its section's VirtualSize.
+
+    Writing a blob into the file-aligned padding after VirtualSize is not
+    enough: the loader guarantees the declared range is mapped with the
+    section's attributes, so code placed there crashes on the first call.
+    D1/D2 on 1809 proved this - identical bytes, only the declared size
+    differed.
+
+    For data sections the declared size may legitimately exceed SizeOfRawData
+    (the loader zero-fills the rest); for code sections the bytes must exist
+    in the file.
+    """
+    import struct as _s
+    e0 = _s.unpack_from("<I", data, 0x3C)[0]
+    nsec = _s.unpack_from("<H", data, e0 + 6)[0]
+    optsz = _s.unpack_from("<H", data, e0 + 20)[0]
+    table = e0 + 24 + optsz
+
+    secs = []
+    for i in range(nsec):
+        h = table + i * 40
+        vsize, vaddr, rawsize, rawptr = _s.unpack_from("<IIII", data, h + 8)
+        chars = _s.unpack_from("<I", data, h + 36)[0]
+        secs.append((vaddr, vsize, rawsize, rawptr, chars, h))
+
+    for idx, (vaddr, vsize, rawsize, rawptr, chars, h) in enumerate(secs):
+        limit = secs[idx + 1][0] if idx + 1 < len(secs) else vaddr + vsize
+        if vaddr <= rva < limit:
+            need = (rva - vaddr) + length
+            if need <= vsize:
+                return True
+            executable = bool(chars & 0x20000000)
+            if executable and need > rawsize:
+                raise ValueError(
+                    f"section at 0x{vaddr:X}: raw size 0x{rawsize:X} is too "
+                    f"small for a blob at 0x{rva:X}+0x{length:X}")
+            if need > limit - vaddr:
+                raise ValueError(
+                    f"RVA 0x{rva:X} would run past the next section")
+            _s.pack_into("<I", data, h + 8, need)
+            print(f"[+] Extended section at 0x{vaddr:X}: VirtualSize "
+                  f"0x{vsize:X} -> 0x{need:X} to cover RVA 0x{rva:X}.")
+            return True
+    return False
+
+
 def _write_blob(data, path, rva, lock_rva=0, patch_lock=False, verbose=True):
     blob = bytearray(open(path, "rb").read())
     if patch_lock:
@@ -235,6 +295,19 @@ def _write_blob(data, path, rva, lock_rva=0, patch_lock=False, verbose=True):
     off = _rva_to_off(data, rva)
     if off is None:
         raise ValueError(f"RVA 0x{rva:X} is not mapped; cannot place {path}")
+
+    # Refuse to overwrite real code: a cave must be padding (00 or CC).
+    # Getting this wrong silently corrupts the kernel and the machine just
+    # reboots after the logo, which is very hard to trace back.
+    occupied = [i for i, b in enumerate(data[off:off + len(blob)])
+                if b not in (0x00, 0xCC) and blob[i] != b]
+    if occupied:
+        first = rva + occupied[0]
+        raise ValueError(
+            f"RVA 0x{rva:X} is not a cave - 0x{first:X} already contains code"
+            f" ({data[off + occupied[0]]:02X}); pick an empty slot")
+
+    _extend_section(data, rva, len(blob))
     data[off:off + len(blob)] = blob
     if verbose:
         print(f"[+] Placed {os.path.basename(path)} at RVA 0x{rva:X} ({len(blob)} bytes).")
@@ -286,12 +359,16 @@ def _install_trampoline(data, shim_rva, blob_name, handler_rva, handler_back,
             _write_blob(data, lahf_path, lahf_rva)
             report["lahf_stub_installed"] = True
 
-        _extend_section(data, tramp_rva, len(tramp))
+    # write the PATCHED trampoline (never re-read the file: doing so would
+    # silently restore the 0x33333333 / 0x44444444 call placeholders, which
+    # sends the #UD handler into an unmapped address)
+    _extend_section(data, tramp_rva, len(tramp))
     off = _rva_to_off(data, tramp_rva)
     if off is None:
         print(f"[-] trampoline RVA 0x{tramp_rva:X} is not mapped.")
         return False
     data[off:off + len(tramp)] = tramp
+    print(f"[+] Placed tramp.bin at RVA 0x{tramp_rva:X} ({len(tramp)} bytes, patched).")
 
     h = int(handler_rva, 16)
     off = _rva_to_off(data, h)
@@ -332,6 +409,7 @@ def patch_kernel_cx16_file(
     output_path: str,
     patch_cpuid: bool = True,
     patch_prefetchw_flag: bool = True,
+    verify_prefetchw: bool = False,
     gates: str = "",
     sites: str = "",
     shim_blob: str = "",
@@ -349,6 +427,7 @@ def patch_kernel_cx16_file(
         data,
         patch_cpuid=patch_cpuid,
         patch_prefetchw_flag=patch_prefetchw_flag,
+        verify_prefetchw=verify_prefetchw,
         gates=gates,
         sites=sites,
         shim_blob=shim_blob,
