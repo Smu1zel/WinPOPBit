@@ -3,6 +3,7 @@ import struct
 
 import pefile
 
+from . import cpu_features as _cpu
 from . import offsets as _offsets
 from . import register_patcher
 from .pe import fix_pe_checksum
@@ -21,6 +22,10 @@ THUNK_TABLES = {
                  "r8d10": 0xEA, "r8d20": 0xF5, "r8d100": 0x100, "r8d150": 0x10E},
     "shim_1909.bin": {"rdi": 0x99, "rdi20": 0xA3, "rsi": 0xAE, "r8d20": 0xB8,
                       "r8d150": 0xC3, "r10": 0xD1, "r11": 0xDB, "r14": 0xE5},
+    # 256-byte variant: the only one that fits the 383-byte PAGELK cave used by
+    # the verified Windows 11 23H2 image (shim + LAHF stub in one run)
+    "shim_256.bin": {"rdi": 0xA0, "rsi": 0xAA, "r8": 0xB4, "r10": 0xCC,
+                     "r11": 0xD6, "r14": 0xE0, "r15": 0xEA, "r8d100": 0xBE},
 }
 
 SITE_LEN = {"r8": 5, "rdi": 5, "rsi": 5, "r10": 5, "r11": 5, "r14": 5,
@@ -297,6 +302,15 @@ def patch_kernel_cx16_bytes(
         if report["gates_patched"]:
             print("    [+] nop'ed %d feature gate(s)" % report["gates_patched"])
 
+        # 3b. non-CX16 CPU features (CET / XSAVE / RDRAND / KVA shadow)
+        if exe_path:
+            if not derived:
+                derived = {}
+            if "symbols" not in derived:
+                derived["symbols"] = _offsets.symbols.resolve(exe_path, verbose=False)
+            report["cpu_features"] = _cpu.patch_cpu_features(
+                data, pe, secs, derived["symbols"], verbose)
+
         # 4. cmpxchg16b emulation
         if not emulate_cx16:
             print("    [*] cmpxchg16b emulation disabled (diagnostic build)")
@@ -326,34 +340,55 @@ def patch_kernel_cx16_bytes(
                 if name in blobs:
                     shim_blob = name
                     break
-        shim_name = os.path.basename(shim_blob)
+        shim_name = os.path.basename(shim_blob.split("@")[0])
         if shim_name not in THUNK_TABLES:
             print("    [-] unknown shim blob '%s'" % shim_name)
             return data, report
         thunk = THUNK_TABLES[shim_name]
 
-        shim_len = len(open(os.path.join(BLOB_DIR, shim_name), "rb").read())
-        tramp_len = len(open(os.path.join(BLOB_DIR, "tramp.bin"), "rb").read())
-        lahf_len = len(open(os.path.join(BLOB_DIR, "lahf.bin"), "rb").read())
-        caves = _pick_caves(pe, secs, [shim_len, tramp_len, lahf_len], verbose)
-        if len(caves) < 3:
-            print("    [-] not enough code caves")
-            return data, report
-        caves.sort(key=lambda c: -c["need"])
-        shim_rva, tramp_rva, lahf_rva = [c["rva"] for c in caves]
+        # a blob spec may pin its placement: "blobs/shim.bin@0xAAAE81".
+        # Explicit addresses win; anything left unset is auto-discovered.
+        def _split(spec, default):
+            if "@" in spec:
+                path, rva = spec.split("@", 1)
+                return path, int(rva, 16)
+            return (os.path.join(BLOB_DIR, spec) if not os.path.isabs(spec) else spec), None
+
+        shim_path, shim_pin = _split(shim_blob, None)
+        tramp_path, tramp_pin = _split(tramp_blob or os.path.join(BLOB_DIR, "tramp.bin"), None)
+        lahf_path, lahf_pin = _split(lahf_blob or os.path.join(BLOB_DIR, "lahf.bin"), None)
+
+        wants = []
+        if shim_pin is None:
+            wants.append(("shim", len(open(shim_path, "rb").read())))
+        if tramp_pin is None:
+            wants.append(("tramp", len(open(tramp_path, "rb").read())))
+        if lahf_pin is None:
+            wants.append(("lahf", len(open(lahf_path, "rb").read())))
+        auto = {}
+        if wants:
+            picked = _pick_caves(pe, secs, [w[1] for w in wants], verbose)
+            if len(picked) < len(wants):
+                print("    [-] not enough code caves")
+                return data, report
+            for (name, _), c in zip(wants, sorted(picked, key=lambda c: -c["need"])):
+                auto[name] = c["rva"]
+        shim_rva = shim_pin if shim_pin is not None else auto["shim"]
+        tramp_rva = tramp_pin if tramp_pin is not None else auto["tramp"]
+        lahf_rva = lahf_pin if lahf_pin is not None else auto["lahf"]
         lock = int(lock_rva, 16) if lock_rva else _find_lock(pe, secs, verbose)
         if lock is None:
             print("    [-] no writable slot for the shim lock")
             return data, report
 
-        shim = bytearray(open(os.path.join(BLOB_DIR, shim_name), "rb").read())
+        shim = bytearray(open(shim_path, "rb").read())
         _place(data, secs, shim, shim_rva, lock_rva=lock, verbose=verbose)
 
-        lahf = bytearray(open(os.path.join(BLOB_DIR, "lahf.bin"), "rb").read())
+        lahf = bytearray(open(lahf_path, "rb").read())
         _place(data, secs, lahf, lahf_rva, verbose=verbose)
         report["lahf_stub_installed"] = True
 
-        tramp = bytearray(open(os.path.join(BLOB_DIR, "tramp.bin"), "rb").read())
+        tramp = bytearray(open(tramp_path, "rb").read())
         while tramp and tramp[-1] == 0x90:
             tramp.pop()
         back = int(handler_back, 16) if handler_back else handler + 5

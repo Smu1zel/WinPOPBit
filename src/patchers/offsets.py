@@ -83,6 +83,26 @@ def _linear_reaches(pe, secs, start, goal, limit=0x400):
     return addr == goal
 
 
+
+def _is_call_result_branch(pe, secs, addr):
+    """True when the branch tests the boolean returned by the call before it.
+
+    `test al,al` / `test eax,eax` right before the branch means the callee is
+    reporting "this CPU cannot do X".  Skipping such a branch lets the kernel
+    continue with the failure state and it crashes later (observed as
+    IRQL_NOT_LESS_OR_EQUAL on 1511 and 1607).
+    """
+    o = _rva2off(secs, addr)
+    if o is None:
+        return False
+    return bytes(pe.data[o - 2:o]) in (b"\x84\xc0", b"\x85\xc0")
+
+
+def _inside_cold_block(pe, secs, addr, block, span=0x200):
+    """True when the branch itself lives in the bugcheck block it targets."""
+    return block <= addr < block + span
+
+
 def find_bugcheck_branches(pe, secs, func_start, func_end):
     """Branches inside [func_start, func_end) that lead into a 0x5D block."""
     blocks = find_5d_blocks(pe, secs)
@@ -112,7 +132,25 @@ def find_bugcheck_branches(pe, secs, func_start, func_end):
             window_lo, window_hi = blk - 0x80, blk + 0x10
             if not (window_lo <= target <= window_hi):
                 continue
+            # A real gate jumps into the cold entry that immediately precedes
+            # the `mov ecx,0x5D` block (0x1D-0x28 bytes on every build seen so
+            # far).  Farther targets are a different cold region and must not
+            # be touched.
+            if target > blk or (blk - target) > 0x30:
+                continue
+            # the branch must live *before* the cold entry it targets; a branch
+            # inside [target, block) is flow within the bugcheck path itself
+            if target <= insn.address < blk:
+                continue
+            # ... and it must not sit right next to the block either: those are
+            # branches belonging to the cold path, not feature checks
+            if blk - 0x40 <= insn.address < blk:
+                continue
             if target == blk or _linear_reaches(pe, secs, target, blk):
+                if _inside_cold_block(pe, secs, insn.address, blk):
+                    break            # internal flow of the bugcheck block
+                if _is_call_result_branch(pe, secs, insn.address):
+                    break            # reporting a failure - must not be skipped
                 gates.append(insn.address)
                 break
         prev = insn
