@@ -1,4 +1,7 @@
 # WinPOPBit (formerly POP4.2)
+> [!IMPORTANT]
+> This is the only official repository I distribute official WinPOPBit binaries on. If you see a link to a Dropbox or otherwise, these are unofficial, [likely malicious files](https://www.virustotal.com/gui/file/de16f806b34b5dc8725b208b1aa642458cda34b611f916554672671b8f6a6856/detection) made to impersonate me. Do **not** run these—I do not endorse them! 
+
 This is an experimental patcher that patches various Windows versions to boot on unsupported hardware.
 
 It started as a patcher that allowed CPUs *with* POPCNT, but *without* SSE4.2 (such as the AMD Phenom and K10 lines of CPUs) to boot Windows 11 24H2 and beyond. The project now also supports patching Windows 10's NX bit requirement as well, allowing users to install the latest version of Windows 10 on systems as old as the year 2000.
