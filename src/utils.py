@@ -12,9 +12,11 @@ def is_windows8_or_newer():
         return (ver.major, ver.minor) >= (6, 2)
     return False
 
+
 if not is_windows8_or_newer():
     print("Error: Windows 8 or newer is required.")
     sys.exit(1)
+
 
 def is_admin() -> bool:
     """
@@ -76,7 +78,9 @@ def require_admin():
             # Successfully launched elevated child process; terminate standard instance
             sys.exit(0)
         else:
-            print("[-] Error: UAC elevation was denied or failed. Please run this script as Administrator.")
+            print(
+                "[-] Error: UAC elevation was denied or failed. Please run this script as Administrator."
+            )
             sys.exit(1)
 
 
@@ -84,15 +88,23 @@ def take_ownership_and_grant(file_path: str):
     """
     Takes ownership of protected Windows system files (TrustedInstaller) and grants
     Full Control permissions to the Administrators group.
-    
+
     Uses the locale-independent SID '*S-1-5-32-544:F' (BUILTIN\\Administrators) to ensure
     compatibility across non-English Windows installations (e.g. German, French, Russian).
     """
     if os.path.exists(file_path):
         # /a grants ownership to Administrators group rather than the current user
-        subprocess.run(["takeown", "/f", file_path, "/a"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            ["takeown", "/f", file_path, "/a"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
         # *S-1-5-32-544 is the universal SID for Administrators
-        subprocess.run(["icacls", file_path, "/grant", "*S-1-5-32-544:F"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            ["icacls", file_path, "/grant", "*S-1-5-32-544:F"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 def clear_readonly(path: str):
@@ -103,7 +115,9 @@ def clear_readonly(path: str):
                 full_d = os.path.join(root, d)
                 try:
                     os.chmod(full_d, 0o777)
-                    ctypes.windll.kernel32.SetFileAttributesW(full_d, 0x80) # FILE_ATTRIBUTE_NORMAL
+                    ctypes.windll.kernel32.SetFileAttributesW(
+                        full_d, 0x80
+                    )  # FILE_ATTRIBUTE_NORMAL
                 except Exception:
                     pass
             for f in files:

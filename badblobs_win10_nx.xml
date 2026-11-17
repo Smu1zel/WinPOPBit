@@ -33,6 +33,30 @@
         </Options>
     </Blob>
 
+    <!-- Windows Boot Loader (winresume): In-place NX bypass and EFER.NXE safety patch -->
+    <!-- winresume happens to share a lot of code with winload, so not patching this -->
+    <!-- breaks booting if Fast Startup is enabled, or if the user ever hibernates. -->
+    <Blob id="winresume_boot_exe" action="patch" patcher="winload_nx" enabled="true">
+        <Target>Windows/System32/boot/winresume.exe</Target>
+        <Description>Windows Boot Loader (winresume copy) Legacy BIOS Boot (Bypasses NX initialization and EFER.NXE fault)</Description>
+        <Options>
+            <Option name="patch_nx" value="true" />
+            <Option name="patch_msr_fallback" value="true" />
+            <!-- winresume doesn't verify anything, for some reason. -->
+            <Option name="patch_ci_filter" value="false" />
+        </Options>
+    </Blob>
+
+    <Blob id="winresume_sys32_exe" action="patch" patcher="winload_nx" enabled="true">
+        <Target>Windows/System32/winresume.exe</Target>
+        <Description>Windows Boot Loader (winresume copy) Legacy BIOS System32 (Bypasses NX initialization and EFER.NXE fault)</Description>
+        <Options>
+            <Option name="patch_nx" value="true" />
+            <Option name="patch_msr_fallback" value="true" />
+            <Option name="patch_ci_filter" value="false" />
+        </Options>
+    </Blob>
+
     <!-- Windows Hardware Abstraction Layer (HAL): In-place NX bypass and PTE XD bit 63 suppression -->
     <Blob id="hal" action="patch" patcher="hal_nx" enabled="true">
         <Target>Windows/System32/hal.dll</Target>

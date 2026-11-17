@@ -5,9 +5,7 @@ from .pe import fix_pe_checksum
 
 
 def patch_hal_nx_bytes(
-    data: bytearray,
-    patch_pte: bool = True,
-    patch_ap_trampoline: bool = True
+    data: bytearray, patch_pte: bool = True, patch_ap_trampoline: bool = True
 ) -> tuple:
     """
     Applies the NX (No-Execute) compatibility patches to a raw 32-bit x86 hal.dll bytearray:
@@ -51,19 +49,25 @@ def patch_hal_nx_bytes(
         sig1 = bytes.fromhex("8D04C5000000C081CE00000080")
         p1 = data.find(sig1)
         if p1 != -1:
-            data[p1 + 7 : p1 + 13] = b'\x90' * 6
+            data[p1 + 7 : p1 + 13] = b"\x90" * 6
             report["remap_xd_patched"] = True
-            print(f"[+] NOPed out HalpRemapVirtualAddress64 PTE XD bit 63 write at offset 0x{p1 + 7:X}.")
+            print(
+                f"[+] NOPed out HalpRemapVirtualAddress64 PTE XD bit 63 write at offset 0x{p1 + 7:X}."
+            )
         elif data.find(bytes.fromhex("8D04C5000000C0909090909090")) != -1:
-            print("[*] Notice: HalpRemapVirtualAddress64 PTE XD bit 63 write is already NOPed.")
+            print(
+                "[*] Notice: HalpRemapVirtualAddress64 PTE XD bit 63 write is already NOPed."
+            )
         else:
-            print("[-] Warning: HalpRemapVirtualAddress64 signature not found in hal.dll.")
+            print(
+                "[-] Warning: HalpRemapVirtualAddress64 signature not found in hal.dll."
+            )
 
         # Patch 2: HalpMap (cmp dword ptr [ebp+0xC], 0x20; je +6; or esi, 0x80000000)
         sig2 = bytes.fromhex("837D0C20740681CE00000080")
         p2 = data.find(sig2)
         if p2 != -1:
-            data[p2 + 6 : p2 + 12] = b'\x90' * 6
+            data[p2 + 6 : p2 + 12] = b"\x90" * 6
             report["map_xd_patched"] = True
             print(f"[+] NOPed out HalpMap PTE XD bit 63 write at offset 0x{p2 + 6:X}.")
         elif data.find(bytes.fromhex("837D0C207406909090909090")) != -1:
@@ -86,23 +90,36 @@ def patch_hal_nx_bytes(
         #   wrmsr
         #   skip_efer:
         #   nop * 6
-        orig_trampoline = bytes.fromhex("2EF70608000100740E66B9A00100000F326683E2FB0F3066B9800000C00F32660D000800000F30")
-        old_noped_trampoline = bytes.fromhex("2EF70608000100740E66B9A00100000F326683E2FB0F30") + b'\x90' * 16
-        dynamic_nx_trampoline = bytes.fromhex("66B8010000800FA266F7C200001000741666B9800000C00F32660D000800000F30909090909090")
+        orig_trampoline = bytes.fromhex(
+            "2EF70608000100740E66B9A00100000F326683E2FB0F3066B9800000C00F32660D000800000F30"
+        )
+        old_noped_trampoline = (
+            bytes.fromhex("2EF70608000100740E66B9A00100000F326683E2FB0F30")
+            + b"\x90" * 16
+        )
+        dynamic_nx_trampoline = bytes.fromhex(
+            "66B8010000800FA266F7C200001000741666B9800000C00F32660D000800000F30909090909090"
+        )
 
         p3 = data.find(orig_trampoline)
         if p3 != -1:
             data[p3 : p3 + 39] = dynamic_nx_trampoline
             report["ap_trampoline_patched"] = True
-            print(f"[+] Replaced AP trampoline at offset 0x{p3:X} with dynamic CPUID NX detection.")
+            print(
+                f"[+] Replaced AP trampoline at offset 0x{p3:X} with dynamic CPUID NX detection."
+            )
         else:
             p3_old = data.find(old_noped_trampoline)
             if p3_old != -1:
                 data[p3_old : p3_old + 39] = dynamic_nx_trampoline
                 report["ap_trampoline_patched"] = True
-                print(f"[+] Upgraded NOPed AP trampoline at offset 0x{p3_old:X} with dynamic CPUID NX detection.")
+                print(
+                    f"[+] Upgraded NOPed AP trampoline at offset 0x{p3_old:X} with dynamic CPUID NX detection."
+                )
             elif data.find(dynamic_nx_trampoline) != -1:
-                print("[*] Notice: AP trampoline dynamic CPUID NX detection is already installed.")
+                print(
+                    "[*] Notice: AP trampoline dynamic CPUID NX detection is already installed."
+                )
             else:
                 print("[-] Warning: AP trampoline signature not found in hal.dll.")
 
@@ -115,7 +132,7 @@ def patch_hal_nx_file(
     output_path: str = None,
     patch_pte: bool = True,
     patch_ap_trampoline: bool = True,
-    **kwargs
+    **kwargs,
 ) -> bool:
     """
     Registered patch routine for Windows Hardware Abstraction Layer ('hal_nx').
@@ -133,9 +150,7 @@ def patch_hal_nx_file(
         data = bytearray(f.read())
 
     modified_data, report = patch_hal_nx_bytes(
-        data,
-        patch_pte=patch_pte,
-        patch_ap_trampoline=patch_ap_trampoline
+        data, patch_pte=patch_pte, patch_ap_trampoline=patch_ap_trampoline
     )
 
     with open(output_path, "wb") as f:

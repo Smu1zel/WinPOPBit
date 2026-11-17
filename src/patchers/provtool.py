@@ -9,7 +9,7 @@ def patch_provtool_bytes(data: bytearray) -> tuple:
     Patches provtool.exe by overwriting its PE entry point with:
       xor eax, eax  ; 31 C0 (return STATUS_SUCCESS / 0)
       ret           ; C3
-    
+
     When Windows Setup executes provtool during the post-install specialize/OOBE pass,
     it immediately exits with return code 0, preventing the unhandled SSE4.2 CRC32
     illegal instruction crash in ntdll.dll while allowing Setup to cleanly finish.
@@ -18,7 +18,7 @@ def patch_provtool_bytes(data: bytearray) -> tuple:
         raise ValueError("Invalid DOS header in provtool binary.")
 
     pe_off = struct.unpack("<I", data[0x3C:0x40])[0]
-    if pe_off + 0x100 > len(data) or data[pe_off:pe_off+4] != b"PE\x00\x00":
+    if pe_off + 0x100 > len(data) or data[pe_off : pe_off + 4] != b"PE\x00\x00":
         raise ValueError("Invalid PE header in provtool binary.")
 
     ep_rva = struct.unpack("<I", data[pe_off + 24 + 16 : pe_off + 24 + 20])[0]
@@ -29,7 +29,9 @@ def patch_provtool_bytes(data: bytearray) -> tuple:
     ep_file_off = None
     for i in range(num_sections):
         sec_off = sec_table_off + i * 40
-        vsize, vrva, rsize, roff = struct.unpack("<IIII", data[sec_off + 8 : sec_off + 24])
+        vsize, vrva, rsize, roff = struct.unpack(
+            "<IIII", data[sec_off + 8 : sec_off + 24]
+        )
         if vrva <= ep_rva < vrva + max(vsize, rsize):
             ep_file_off = roff + (ep_rva - vrva)
             break
@@ -37,12 +39,16 @@ def patch_provtool_bytes(data: bytearray) -> tuple:
     if ep_file_off is None or ep_file_off + 3 > len(data):
         raise ValueError(f"Could not map entry point RVA 0x{ep_rva:X} to file offset.")
 
-    if data[ep_file_off:ep_file_off+3] == b"\x31\xC0\xC3":
-        print(f"[*] Notice: provtool.exe entry point at offset 0x{ep_file_off:X} is already patched (31 C0 C3).")
+    if data[ep_file_off : ep_file_off + 3] == b"\x31\xc0\xc3":
+        print(
+            f"[*] Notice: provtool.exe entry point at offset 0x{ep_file_off:X} is already patched (31 C0 C3)."
+        )
         return data, True
 
-    data[ep_file_off:ep_file_off+3] = b"\x31\xC0\xC3"
-    print(f"[+] Patched provtool.exe entry point at offset 0x{ep_file_off:X} (31 C0 C3 -> xor eax, eax; ret).")
+    data[ep_file_off : ep_file_off + 3] = b"\x31\xc0\xc3"
+    print(
+        f"[+] Patched provtool.exe entry point at offset 0x{ep_file_off:X} (31 C0 C3 -> xor eax, eax; ret)."
+    )
     return data, True
 
 

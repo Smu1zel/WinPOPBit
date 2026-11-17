@@ -44,15 +44,18 @@ class UnifiedArgumentParser(argparse.ArgumentParser):
     Custom ArgumentParser that automatically appends full parameter documentation
     for all registered subcommands directly into the top-level --help output.
     """
+
     def format_help(self):
         base_help = super().format_help()
-        if hasattr(self, '_subparsers_ref') and self._subparsers_ref:
+        if hasattr(self, "_subparsers_ref") and self._subparsers_ref:
             sections = []
             sections.append("\n" + "=" * 78)
             sections.append("DETAILED SUBCOMMAND PARAMETER REFERENCE")
             sections.append("=" * 78 + "\n")
             for name, sub in self._subparsers_ref.choices.items():
-                sections.append(f"--- [ COMMAND: {name.upper()} ] " + "-" * (58 - len(name)))
+                sections.append(
+                    f"--- [ COMMAND: {name.upper()} ] " + "-" * (58 - len(name))
+                )
                 sections.append(sub.format_help())
             return base_help + "\n".join(sections)
         return base_help
@@ -91,49 +94,131 @@ COMMON USAGE EXAMPLES:
 
   # 6. Interactive wizard (prompts for ISO path and edition index):
   python winpopbit.py
-        """
+        """,
     )
 
-    subparsers = parser.add_subparsers(dest="mode", help="Execution mode (run 'winpopbit.py <command> --help' for command-specific help)")
+    subparsers = parser.add_subparsers(
+        dest="mode",
+        help="Execution mode (run 'winpopbit.py <command> --help' for command-specific help)",
+    )
     parser._subparsers_ref = subparsers
 
     # Mode 1: PATCH (Standalone binary patcher)
     patch_parser = subparsers.add_parser(
         "patch",
         help="Directly patch an individual binary file using a registered patcher routine",
-        description="Applies a registered patch routine (e.g. 'kernel_sse42') directly to an individual PE binary file."
+        description="Applies a registered patch routine (e.g. 'kernel_sse42') directly to an individual PE binary file.",
     )
-    patch_parser.add_argument("patcher", help="Registered patcher routine to execute (e.g. 'kernel_sse42'). Available: " + ", ".join(PATCHER_REGISTRY.keys()))
-    patch_parser.add_argument("-i", "--input", required=True, metavar="PATH", help="Path to input PE binary to patch (e.g. C:\\path\\to\\ntoskrnl.exe)")
-    patch_parser.add_argument("-o", "--output", default=None, metavar="PATH", help="Destination path for patched binary. If omitted, the input binary is modified and overwritten in-place. [Default: overwrite input]")
-    patch_parser.add_argument("-O", "--option", action="append", default=[], metavar="KEY=VALUE", help="Pass options to the patcher routine (e.g. -O patch_kiset=true -O debug_loop=true). Can be specified multiple times.")
+    patch_parser.add_argument(
+        "patcher",
+        help="Registered patcher routine to execute (e.g. 'kernel_sse42'). Available: "
+        + ", ".join(PATCHER_REGISTRY.keys()),
+    )
+    patch_parser.add_argument(
+        "-i",
+        "--input",
+        required=True,
+        metavar="PATH",
+        help="Path to input PE binary to patch (e.g. C:\\path\\to\\ntoskrnl.exe)",
+    )
+    patch_parser.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        metavar="PATH",
+        help="Destination path for patched binary. If omitted, the input binary is modified and overwritten in-place. [Default: overwrite input]",
+    )
+    patch_parser.add_argument(
+        "-O",
+        "--option",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="Pass options to the patcher routine (e.g. -O patch_kiset=true -O debug_loop=true). Can be specified multiple times.",
+    )
 
     # Mode 2: BUILD (Full ISO pipeline)
     build_parser = subparsers.add_parser(
         "build",
         help="Build an end-to-end bootable patched Windows 11 ISO (DISM + Blobs + Registry + BCD + oscdimg)",
-        description="Automates the full ISO build pipeline using configurations from badblobs.xml: mounts/extracts ISO media, patches boot.wim, patches install.wim/install.esd, injects replacement blobs, configures offline registry and BCD stores, and masters a dual-boot (UEFI + BIOS) ISO."
+        description="Automates the full ISO build pipeline using configurations from badblobs.xml: mounts/extracts ISO media, patches boot.wim, patches install.wim/install.esd, injects replacement blobs, configures offline registry and BCD stores, and masters a dual-boot (UEFI + BIOS) ISO.",
     )
-    build_parser.add_argument("-i", "--input-iso", required=True, metavar="PATH", help="Path to source Windows 11 installation ISO file or an extracted directory containing setup media")
-    build_parser.add_argument("-o", "--output-iso", default="patched_install.iso", metavar="PATH", help="Destination path and filename for the generated bootable patched ISO. [Default: 'patched_install.iso']")
-    build_parser.add_argument("-w", "--work-dir", default=None, metavar="DIR", help="Temporary directory for ISO file staging, WIM mounting, and registry hives. [Default: './build_workspace']")
-    build_parser.add_argument("-c", "--config", default=None, metavar="XML", help="Path to badblobs.xml profile defining patch handlers, replacement blobs, targets, and BCD commands. [Default: './badblobs.xml']")
-    build_parser.add_argument("-b", "--blobs-dir", default=None, metavar="DIR", help="Directory containing binary replacement files (e.g. 23H2 WindowsCodecs.dll). [Default: './blobs']")
+    build_parser.add_argument(
+        "-i",
+        "--input-iso",
+        required=True,
+        metavar="PATH",
+        help="Path to source Windows 11 installation ISO file or an extracted directory containing setup media",
+    )
+    build_parser.add_argument(
+        "-o",
+        "--output-iso",
+        default="patched_install.iso",
+        metavar="PATH",
+        help="Destination path and filename for the generated bootable patched ISO. [Default: 'patched_install.iso']",
+    )
+    build_parser.add_argument(
+        "-w",
+        "--work-dir",
+        default=None,
+        metavar="DIR",
+        help="Temporary directory for ISO file staging, WIM mounting, and registry hives. [Default: './build_workspace']",
+    )
+    build_parser.add_argument(
+        "-c",
+        "--config",
+        default=None,
+        metavar="XML",
+        help="Path to badblobs.xml profile defining patch handlers, replacement blobs, targets, and BCD commands. [Default: './badblobs.xml']",
+    )
+    build_parser.add_argument(
+        "-b",
+        "--blobs-dir",
+        default=None,
+        metavar="DIR",
+        help="Directory containing binary replacement files (e.g. 23H2 WindowsCodecs.dll). [Default: './blobs']",
+    )
     index_group = build_parser.add_mutually_exclusive_group()
-    index_group.add_argument("--index", default=None, metavar="INDEX", help="Specific Windows edition index in install.wim to patch (e.g. '6' for Windows 11 Pro, 'all' for every edition, or 'none' to skip install.wim entirely). Mutually exclusive with --boot-only. [Default: 'all']")
-    index_group.add_argument("--boot-only", action="store_true", help="Only patch boot.wim (Setup wizard) and completely skip install.wim. Mutually exclusive with --index.")
-    build_parser.add_argument("--clean", action="store_true", help="Force clean extraction of source ISO (wipes existing workspace ISO files)")
-    build_parser.add_argument("--allow-missing-blobs", action="store_true", help="Downgrade missing replacement blob errors from fatal failures to warnings. [Default: False (fail-fast validation)]")
-    build_parser.add_argument("--oscdimg-path", default=None, metavar="PATH", help="Explicit path to oscdimg.exe. If omitted or outdated (< v2.55), automatically searches ADK/MiniTool/PATH or auto-downloads official Microsoft ADK v2.56 (~74 KB)")
+    index_group.add_argument(
+        "--index",
+        default=None,
+        metavar="INDEX",
+        help="Specific Windows edition index in install.wim to patch (e.g. '6' for Windows 11 Pro, 'all' for every edition, or 'none' to skip install.wim entirely). Mutually exclusive with --boot-only. [Default: 'all']",
+    )
+    index_group.add_argument(
+        "--boot-only",
+        action="store_true",
+        help="Only patch boot.wim (Setup wizard) and completely skip install.wim. Mutually exclusive with --index.",
+    )
+    build_parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Force clean extraction of source ISO (wipes existing workspace ISO files)",
+    )
+    build_parser.add_argument(
+        "--allow-missing-blobs",
+        action="store_true",
+        help="Downgrade missing replacement blob errors from fatal failures to warnings. [Default: False (fail-fast validation)]",
+    )
+    build_parser.add_argument(
+        "--oscdimg-path",
+        default=None,
+        metavar="PATH",
+        help="Explicit path to oscdimg.exe. If omitted or outdated (< v2.55), automatically searches ADK/MiniTool/PATH or auto-downloads official Microsoft ADK v2.56 (~74 KB)",
+    )
 
     # Interactive prompt fallback when run with no arguments or double-clicked
     custom_args = None
     if len(sys.argv) == 1:
-        print("="*70)
-        print("WinPOPBit - The Windows 11 SSE4.2 and Windows 10 NX Requirements Patcher")
-        print("="*70)
-        print("[!] This flow has not been updated for Windows 10 patching just yet; use manual commands.")
-        print("="*70)
+        print("=" * 70)
+        print(
+            "WinPOPBit - The Windows 11 SSE4.2 and Windows 10 NX Requirements Patcher"
+        )
+        print("=" * 70)
+        print(
+            "[!] This flow has not been updated for Windows 10 patching just yet; use manual commands."
+        )
+        print("=" * 70)
         print("1. Build Patched ISO (Automated)")
         print("2. Patch standalone ntoskrnl.exe")
         print("3. Exit")
@@ -145,7 +230,9 @@ COMMON USAGE EXAMPLES:
                 print("[-] Error: ISO file not found.")
                 sys.exit(1)
 
-            idx_input = input("Enter OS Index to patch (e.g. 6 for Pro, 'all' for all editions, or 'none' for boot.wim only) [default: 1]: ").strip()
+            idx_input = input(
+                "Enter OS Index to patch (e.g. 6 for Pro, 'all' for all editions, or 'none' for boot.wim only) [default: 1]: "
+            ).strip()
             if not idx_input:
                 idx_input = "1"
 
@@ -167,7 +254,9 @@ COMMON USAGE EXAMPLES:
     # -------------------------------------------------------------------------
     if args.mode == "patch":
         if args.patcher not in PATCHER_REGISTRY:
-            print(f"[-] Error: Unknown patcher '{args.patcher}'. Available registered patchers: {list(PATCHER_REGISTRY.keys())}")
+            print(
+                f"[-] Error: Unknown patcher '{args.patcher}'. Available registered patchers: {list(PATCHER_REGISTRY.keys())}"
+            )
             sys.exit(1)
 
         # Parse key=value options from -O / --option
@@ -192,13 +281,13 @@ COMMON USAGE EXAMPLES:
 
         out_file = args.output if args.output else args.input
 
-        print("="*70)
+        print("=" * 70)
         print(f"WinPOPBit Standalone Patch Mode: '{args.patcher}'")
         print(f"  Target:     {args.input}")
         print(f"  Output:     {out_file}")
         if options:
             print(f"  Options:    {options}")
-        print("="*70)
+        print("=" * 70)
 
         handler = PATCHER_REGISTRY[args.patcher]
         success = handler(args.input, out_file, **options)
@@ -232,7 +321,9 @@ COMMON USAGE EXAMPLES:
 
         # Enforce fail-fast integrity validation
         if not db.validate(allow_missing=args.allow_missing_blobs):
-            print("[-] Build aborted due to validation errors. Use --allow-missing-blobs to bypass.")
+            print(
+                "[-] Build aborted due to validation errors. Use --allow-missing-blobs to bypass."
+            )
             sys.exit(1)
 
         # Resolve index and boot_only mode
@@ -250,7 +341,9 @@ COMMON USAGE EXAMPLES:
                 try:
                     selected_index = int(idx_str)
                 except ValueError:
-                    print(f"[-] Error: Invalid index '{args.index}'. Must be a number (e.g. 6), 'all', or 'none'.")
+                    print(
+                        f"[-] Error: Invalid index '{args.index}'. Must be a number (e.g. 6), 'all', or 'none'."
+                    )
                     sys.exit(1)
 
         build_iso(
@@ -262,9 +355,9 @@ COMMON USAGE EXAMPLES:
             selected_index=selected_index,
             boot_only=boot_only,
             clean=args.clean,
-            oscdimg_path=args.oscdimg_path
+            oscdimg_path=args.oscdimg_path,
         )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

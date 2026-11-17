@@ -14,6 +14,7 @@ containing:
   - LICENSE.PEFILE
   - blobs/README.txt
   - README.html (compiled from README.md at runtime)
+  - GUIDE_WIN11.html (compiled from GUIDE_WIN11.md at runtime)
 ================================================================================
 """
 
@@ -97,7 +98,7 @@ def check_dependencies(python_exe: str):
         for m in missing:
             print(f"    - {m}")
         print("\nPlease install them using:")
-        print(f"    \"{python_exe}\" -m pip install {' '.join(missing)}")
+        print(f'    "{python_exe}" -m pip install {" ".join(missing)}')
         sys.exit(1)
 
 
@@ -111,7 +112,7 @@ def build_executable(python_exe: str, root_dir: Path, build_dir: Path) -> Path:
         sys.exit(1)
 
     print(f"[*] Compiling {script_path.name} with Nuitka ({python_exe})...")
-    
+
     cmd = [
         python_exe,
         "-m",
@@ -135,7 +136,7 @@ def build_executable(python_exe: str, root_dir: Path, build_dir: Path) -> Path:
 
     print("[*] Running command:")
     print("    " + " ".join(cmd))
-    
+
     res = subprocess.run(cmd, cwd=root_dir)
     if res.returncode != 0:
         print(f"[-] Nuitka build failed with return code {res.returncode}")
@@ -155,28 +156,38 @@ def build_executable(python_exe: str, root_dir: Path, build_dir: Path) -> Path:
     return exe_path
 
 
-def compile_readme_to_html(root_dir: Path) -> Path:
+def compile_markdown_to_html(
+    root_dir: Path,
+    md_name: str = "README.md",
+    html_name: str = None,
+    title: str = None,
+) -> Path:
     """
-    Compiles README.md into a standalone, styled README.html with:
+    Compiles a Markdown file into a standalone, styled HTML file with:
       - GitHub-style alert callouts (> [!NOTE], > [!IMPORTANT], etc.)
       - Fenced code blocks and tables
       - Inlined base64 images (so the HTML is completely self-contained)
       - Responsive GitHub-like CSS with dark/light mode support
     """
+    if html_name is None:
+        html_name = Path(md_name).stem + ".html"
+    if title is None:
+        title = Path(md_name).stem
+
     try:
         import markdown2
     except ImportError:
         print("[-] Warning: 'markdown2' is not installed. Run: pip install markdown2")
-        print("    Skipping README.html generation.")
+        print("    Skipping HTML generation.")
         return None
 
-    readme_md = root_dir / "README.md"
-    if not readme_md.is_file():
-        print(f"[-] Warning: {readme_md} not found.")
+    md_path = root_dir / md_name
+    if not md_path.is_file():
+        print(f"[-] Warning: {md_path} not found.")
         return None
 
-    print(f"[*] Compiling {readme_md.name} to standalone README.html...")
-    content = readme_md.read_text(encoding="utf-8")
+    print(f"[*] Compiling {md_path.name} to standalone {html_name}...")
+    content = md_path.read_text(encoding="utf-8")
 
     extras = [
         "fenced-code-blocks",
@@ -201,7 +212,9 @@ def compile_readme_to_html(root_dir: Path) -> Path:
             mime_type, _ = mimetypes.guess_type(str(img_path))
             mime_type = mime_type or "image/png"
             b64_data = base64.b64encode(img_path.read_bytes()).decode("ascii")
-            print(f"    + Inlined image {img_src} as base64 ({img_path.stat().st_size:,} bytes)")
+            print(
+                f"    + Inlined image {img_src} as base64 ({img_path.stat().st_size:,} bytes)"
+            )
             return f'src="data:{mime_type};base64,{b64_data}"'
         return match.group(0)
 
@@ -213,7 +226,7 @@ def compile_readme_to_html(root_dir: Path) -> Path:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>WinPOPBit - README</title>
+<title>{title}</title>
 <style>
   :root {{
     --bg-color: #0d1117;
@@ -314,10 +327,26 @@ def compile_readme_to_html(root_dir: Path) -> Path:
 </html>
 """
 
-    out_path = root_dir / "README.html"
+    out_path = root_dir / html_name
     out_path.write_text(full_html, encoding="utf-8")
-    print(f"[+] Successfully generated standalone {out_path.name} ({out_path.stat().st_size:,} bytes)")
+    print(
+        f"[+] Successfully generated standalone {out_path.name} ({out_path.stat().st_size:,} bytes)"
+    )
     return out_path
+
+
+def compile_readme_to_html(root_dir: Path) -> Path:
+    """Compiles README.md into README.html."""
+    return compile_markdown_to_html(
+        root_dir, "README.md", "README.html", "WinPOPBit - README"
+    )
+
+
+def compile_guide_to_html(root_dir: Path) -> Path:
+    """Compiles GUIDE_WIN11.md into GUIDE_WIN11.html."""
+    return compile_markdown_to_html(
+        root_dir, "GUIDE_WIN11.md", "GUIDE_WIN11.html", "WinPOPBit - Windows 11 Guide"
+    )
 
 
 def create_release_zip(root_dir: Path, exe_path: Path, output_zip: Path):
@@ -325,6 +354,7 @@ def create_release_zip(root_dir: Path, exe_path: Path, output_zip: Path):
     Packages the executable and required assets into a zip file.
     """
     readme_html = compile_readme_to_html(root_dir)
+    guide_html = compile_guide_to_html(root_dir)
 
     required_files = [
         (exe_path, "winpopbit.exe"),
@@ -333,12 +363,13 @@ def create_release_zip(root_dir: Path, exe_path: Path, output_zip: Path):
         (root_dir / "badblobs_win10_nx.xml", "badblobs_win10_nx.xml"),
         (root_dir / "LICENSE", "LICENSE"),
         (root_dir / "LICENSE.PEFILE", "LICENSE.PEFILE"),
-        (root_dir / "README.md", "README.md"),
         (root_dir / "blobs" / "README.txt", "blobs/README.txt"),
     ]
 
     if readme_html and readme_html.is_file():
         required_files.append((readme_html, "README.html"))
+    if guide_html and guide_html.is_file():
+        required_files.append((guide_html, "GUIDE_WIN11.html"))
 
     for file_path, arcname in required_files:
         if not file_path.is_file():
@@ -355,11 +386,15 @@ def create_release_zip(root_dir: Path, exe_path: Path, output_zip: Path):
             print(f"    + Adding {arcname} ({file_path.stat().st_size:,} bytes)")
             zf.write(file_path, arcname=arcname)
 
-    print(f"[+] Release package created successfully: {output_zip} ({output_zip.stat().st_size:,} bytes)")
+    print(
+        f"[+] Release package created successfully: {output_zip} ({output_zip.stat().st_size:,} bytes)"
+    )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Build and package WinPOPBit into a release zip archive.")
+    parser = argparse.ArgumentParser(
+        description="Build and package WinPOPBit into a release zip archive."
+    )
     parser.add_argument(
         "-o",
         "--output",
@@ -392,13 +427,17 @@ def main():
         if not exe_path.is_file():
             exe_path = root_dir / "winpopbit.exe"
         if not exe_path.is_file():
-            print(f"[-] Error: --skip-build specified but executable not found at {build_dir / 'winpopbit.exe'}")
+            print(
+                f"[-] Error: --skip-build specified but executable not found at {build_dir / 'winpopbit.exe'}"
+            )
             sys.exit(1)
     else:
         python_exe = args.python or find_python_38()
         if not python_exe:
             print("[-] Error: Python 3.8 executable could not be found.")
-            print("    Please install Python 3.8 or specify path using --python <path_to_python.exe>")
+            print(
+                "    Please install Python 3.8 or specify path using --python <path_to_python.exe>"
+            )
             sys.exit(1)
 
         print(f"[+] Using Python 3.8: {python_exe}")

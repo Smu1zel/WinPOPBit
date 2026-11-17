@@ -15,24 +15,26 @@ def fix_pe_checksum(file_path: str) -> bool:
         imagehlp.MapFileAndCheckSumW.argtypes = [
             ctypes.c_wchar_p,
             ctypes.POINTER(ctypes.c_ulong),
-            ctypes.POINTER(ctypes.c_ulong)
+            ctypes.POINTER(ctypes.c_ulong),
         ]
         imagehlp.MapFileAndCheckSumW.restype = ctypes.c_ulong
-        
+
         orig_sum = ctypes.c_ulong(0)
         new_sum = ctypes.c_ulong(0)
-        
+
         # CHECKSUM_SUCCESS is 0
-        status = imagehlp.MapFileAndCheckSumW(file_path, ctypes.byref(orig_sum), ctypes.byref(new_sum))
-        
+        status = imagehlp.MapFileAndCheckSumW(
+            file_path, ctypes.byref(orig_sum), ctypes.byref(new_sum)
+        )
+
         if status == 0:
             # Write calculated checksum directly to OptionalHeader.CheckSum in PE header
             with open(file_path, "r+b") as f:
-                f.seek(0x3C) # e_lfanew offset in DOS header
+                f.seek(0x3C)  # e_lfanew offset in DOS header
                 pe_offset = int.from_bytes(f.read(4), "little")
                 f.seek(pe_offset)
                 sig = f.read(4)
-                if sig == b'PE\x00\x00':
+                if sig == b"PE\x00\x00":
                     # OptionalHeader.CheckSum is at offset 64 (0x40) from start of OptionalHeader
                     # PE signature (4) + FileHeader (20) + 64 = pe_offset + 88
                     checksum_offset = pe_offset + 24 + 64
@@ -40,7 +42,9 @@ def fix_pe_checksum(file_path: str) -> bool:
                     f.write(new_sum.value.to_bytes(4, "little"))
                     return True
     except Exception as e:
-        print(f"[-] imagehlp.dll checksum calculation failed ({e}). Attempting pefile fallback...")
+        print(
+            f"[-] imagehlp.dll checksum calculation failed ({e}). Attempting pefile fallback..."
+        )
 
     # Fallback using pefile library if imagehlp is unavailable
     try:
