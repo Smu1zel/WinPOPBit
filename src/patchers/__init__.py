@@ -26,3 +26,4 @@ from . import winload
 from . import winload_nx
 from . import hal_nx
 from . import provtool
+from . import kernel_cx16
