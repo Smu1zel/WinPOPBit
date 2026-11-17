@@ -2,9 +2,10 @@ import os
 import subprocess
 import shutil
 import re
+import shlex
 from .utils import take_ownership_and_grant, clear_readonly, safe_replace_file
 from .patchers import PATCHER_REGISTRY
-from .database import BlobDatabase
+from .database import BlobDatabase, DEFAULT_BCD_COMMANDS
 
 
 class WimMountSession:
@@ -66,17 +67,46 @@ class WimMountSession:
                 else:
                     print(f"  [-] Target '{blob.target}' does not exist in this image index. Skipping.")
 
+    def modify_offline_bcdtemplate(self, bcd_commands: list = None):
+        bcdtemplate = os.path.join(self.mount_dir, "Windows", "System32", "config", "BCD-Template")
+        if not os.path.exists(bcdtemplate):
+            return
+            
+        print("  [+] Configuring offline BCD-Template (Adding BCD flags to disable integrity checks)...")
+        
+        commands_to_run = DEFAULT_BCD_COMMANDS if bcd_commands is None else bcd_commands
+        for item in commands_to_run:
+                if isinstance(item, (list, tuple)):
+                    tokens = list(item)
+                else:
+                    tokens = [t[1:-1] if t.startswith('"') and t.endswith('"') and len(t) >= 2 else t
+                              for t in shlex.split(item.strip(), posix=False)]
+
+                if not tokens:
+                    continue
+
+                # Strip redundant bcdedit[.exe] if present
+                if tokens[0].lower() in ("bcdedit", "bcdedit.exe"):
+                    tokens.pop(0)
+
+                # Strip redundant /store <path> if present
+                if len(tokens) >= 2 and tokens[0].lower() == "/store":
+                    tokens.pop(0)
+                    tokens.pop(0)
+
+                cmd = ["bcdedit.exe", "/store", bcdtemplate] + tokens
+                print(f"   [+] bcdedit: {' '.join(tokens)}")
+                subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                
     def modify_offline_registry(self):
         """
         Loads the offline SYSTEM hive (Windows\\System32\\config\\SYSTEM) into HKLM\\POP42_OfflineSystem
-        and configures SystemStartOptions with 'DISABLE_INTEGRITY_CHECKS TESTSIGNING' to allow
-        the patched kernel to run with driver signature checks disabled.
         """
         system_hive = os.path.join(self.mount_dir, "Windows", "System32", "config", "SYSTEM")
         if not os.path.exists(system_hive):
             return
 
-        print("  [+] Configuring offline registry (DISABLE_INTEGRITY_CHECKS TESTSIGNING, disabling ReFS)...")
+        print("  [+] Configuring offline registry (disabling ReFS)...")
         # Ensure any leftover hive from a prior interrupted session is unloaded
         subprocess.run(["reg.exe", "unload", "HKLM\\POP42_OfflineSystem"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
@@ -84,13 +114,6 @@ class WimMountSession:
         if res.returncode == 0:
             self.reg_loaded = True
             try:
-                # Set SystemStartOptions in ControlSet001\\Control
-                reg_cmd = [
-                    "reg.exe", "add", "HKLM\\POP42_OfflineSystem\\ControlSet001\\Control",
-                    "/v", "SystemStartOptions", "/t", "REG_SZ", "/d", "DISABLE_INTEGRITY_CHECKS TESTSIGNING", "/f"
-                ]
-                subprocess.run(reg_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
                 # Disable ReFS & ReFSv1 services (Start=4, remove BootFlags and Group) to prevent WinPE auto-load
                 for srv in ("ReFS", "ReFSv1"):
                     for cs in ("ControlSet001", "ControlSet002"):

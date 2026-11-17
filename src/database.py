@@ -17,8 +17,8 @@ class BlobItem:
 
 
 DEFAULT_BCD_COMMANDS = [
-    "/set {default} nointegritychecks Yes",
-    "/set {default} bootmenupolicy legacy"
+    "/set {bootloadersettings} nointegritychecks Yes",
+    "/set {globalsettings} bootmenupolicy legacy"
 ]
 
 
