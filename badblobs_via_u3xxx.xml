@@ -54,7 +54,7 @@
     <!-- BCD Store Configuration -->
     <!-- Commands executed against both BIOS (boot\bcd) and UEFI (efi\microsoft\boot\bcd) stores via bcdedit -->
     <Bcd>
-        <Command>/set {default} nointegritychecks Yes</Command>
+        <Command>/set {bootloadersettings} nointegritychecks Yes</Command>
         <Command>/set {default} bootmenupolicy legacy</Command>
     </Bcd>
 </BadBlobs>

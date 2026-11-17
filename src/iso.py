@@ -329,21 +329,32 @@ def build_iso(
             sys.exit(1)
 
     # -------------------------------------------------------------------------
-    # PART 1: PATCH BOOT.WIM (Index 2 for Windows Setup Wizard)
+    # PART 1: PATCH BOOT.WIM (Index 1 for Windows PE used for install/upgrade and Index 2 for Windows Setup Wizard)
     # -------------------------------------------------------------------------
     src_boot_wim = os.path.join(iso_files_dir, "sources", "boot.wim")
     if not os.path.exists(src_boot_wim):
         raise FileNotFoundError(f"boot.wim not found in {src_boot_wim}")
 
-    print("\n" + "=" * 70)
-    print("STEP 1: Patching boot.wim (Setup Environment)")
-    print("=" * 70)
+    print("\n" + "="*70)
+    print("STEP 1: Patching boot.wim (Windows PE)")
+    print("="*70)
     clear_readonly(src_boot_wim)
     shutil.copy2(src_boot_wim, local_boot_wim)
     clear_readonly(local_boot_wim)
 
+    with WimMountSession(local_boot_wim, index=1, mount_dir=mount_dir) as session:
+        session.apply_blobs(db, blobs_dir)
+        session.modify_offline_bcdtemplate()
+        session.modify_offline_registry()
+        session.commit()
+        
+    print("\n" + "="*70)
+    print("STEP 1.5: Patching boot.wim (Setup Environment)")
+    print("="*70)
+    
     with WimMountSession(local_boot_wim, index=2, mount_dir=mount_dir) as session:
         session.apply_blobs(db, blobs_dir)
+        session.modify_offline_bcdtemplate()
         session.modify_offline_registry()
         session.commit()
 
@@ -422,6 +433,7 @@ def build_iso(
                 local_install_wim, index=idx, mount_dir=mount_dir
             ) as session:
                 session.apply_blobs(db, blobs_dir)
+                session.modify_offline_bcdtemplate()
                 session.modify_offline_registry()
 
                 # Patch nested WinRE (Windows Recovery Environment) inside the OS image
@@ -490,4 +502,6 @@ def build_iso(
     print("\n" + "=" * 70)
     print(f"SUCCESS: Patched ISO built successfully!")
     print(f"Output File: {os.path.abspath(output_iso)}")
-    print("=" * 70)
+    print("="*70)
+    input("Press the Enter key to continue...")
+
